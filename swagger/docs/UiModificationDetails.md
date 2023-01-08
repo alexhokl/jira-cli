@@ -1,0 +1,14 @@
+# UiModificationDetails
+
+## Properties
+Name | Type | Description | Notes
+------------ | ------------- | ------------- | -------------
+**Contexts** | [**[]UiModificationContextDetails**](UiModificationContextDetails.md) | List of contexts of the UI modification. The maximum number of contexts is 1000. | [optional] [default to null]
+**Data** | **string** | The data of the UI modification. The maximum size of the data is 50000 characters. | [optional] [default to null]
+**Description** | **string** | The description of the UI modification. The maximum length is 255 characters. | [optional] [default to null]
+**Id** | **string** | The ID of the UI modification. | [default to null]
+**Name** | **string** | The name of the UI modification. The maximum length is 255 characters. | [default to null]
+**Self** | **string** | The URL of the UI modification. | [default to null]
+
+[[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
+
