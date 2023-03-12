@@ -9,6 +9,7 @@ import (
 )
 
 var cfgFile string
+var noColor bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -25,6 +26,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.jira-cli.yaml)")
+	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "Disable color output")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
