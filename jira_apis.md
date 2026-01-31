@@ -4,8 +4,8 @@ This document summarizes the API endpoints available in the auto-generated
 Swagger clients.
 
 > **Note:** This document covers two API clients:
-> - **Jira Cloud Platform REST API v3** (`swagger/` directory)
-> - **Jira Software REST API** (`swagger_software/` directory)
+> - **[Jira Cloud Platform REST API v3](#jira-cloud-rest-api-v3---available-endpoints)** (`swagger/` directory)
+> - **[Jira Software REST API](#jira-software-agile-rest-api---available-endpoints)** (`swagger_software/` directory)
 
 ---
 
