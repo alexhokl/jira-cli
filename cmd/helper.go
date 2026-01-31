@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 
@@ -80,4 +82,35 @@ func getConfiguration() *swagger.Configuration {
 
 func newClient() *swagger.APIClient {
 	return swagger.NewAPIClient(getConfiguration())
+}
+
+func getMessageFromEditor() (string, error) {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		return "", fmt.Errorf("EDITOR environment variable is not set")
+	}
+
+	tmpFile, err := os.CreateTemp("", "jira-comment-*.txt")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	tmpFileName := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpFileName)
+
+	cmd := exec.Command(editor, tmpFileName)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to run editor: %w", err)
+	}
+
+	content, err := os.ReadFile(tmpFileName)
+	if err != nil {
+		return "", fmt.Errorf("failed to read temporary file: %w", err)
+	}
+
+	return strings.TrimSpace(string(content)), nil
 }

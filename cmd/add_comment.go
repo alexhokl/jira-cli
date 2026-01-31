@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/alexhokl/jira-cli/swagger"
 	"github.com/spf13/cobra"
@@ -32,7 +33,19 @@ func init() {
 }
 
 func runAddComment(_ *cobra.Command, _ []string) error {
-	body := newComment(addCommentOpts.message)
+	message := addCommentOpts.message
+	if strings.TrimSpace(message) == "" {
+		var err error
+		message, err = getMessageFromEditor()
+		if err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(message) == "" {
+		return fmt.Errorf("comment message cannot be empty")
+	}
+
+	body := newComment(message)
 	client := newClient()
 	_, _, err := client.IssueCommentsAPI.AddComment(getAuthContext(), addCommentOpts.id).Comment(*body).Execute()
 	if err != nil {
