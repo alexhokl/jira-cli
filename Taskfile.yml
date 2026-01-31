@@ -87,3 +87,43 @@ tasks:
       - perl -i -pe 's/\*o\.HasDefaultValue$/*o.HasDefaultValueFlag/g' swagger/model_field_create_metadata.go
       # Fix undefined TYPE in model_mandatory_field_value.go
       - perl -i -pe 's/var type_ TYPE = "raw"/var type_ string = "raw"/g' swagger/model_mandatory_field_value.go
+
+  generate-swagger-software:
+    desc: Generate Go client from swagger_software.json using openapi-generator
+    preconditions:
+      - sh: command -v openapi-generator
+        msg: "openapi-generator is required but not installed. Install with: brew install openapi-generator"
+      - sh: test -f swagger_software.json
+        msg: "swagger_software.json not found. Run 'task pull-swagger' first"
+    cmds:
+      - rm -rf swagger_software
+      - >-
+        openapi-generator generate -i swagger_software.json -g go -o swagger_software --package-name swagger_software --additional-properties=isGoSubmodule=true --git-user-id alexhokl --git-repo-id jira-cli
+      - task: fix-swagger-software-codegen-issues
+      - go mod tidy
+
+  fix-swagger-software-codegen-issues:
+    desc: Fix code generation issues in swagger_software files
+    internal: true
+    preconditions:
+      - sh: command -v perl
+        msg: "perl is required but not installed"
+      - sh: test -f swagger_software/model_field_metadata.go
+        msg: "swagger_software/model_field_metadata.go not found. Run 'task generate-swagger-software' first"
+      - sh: test -f swagger_software/model_issue_bean_editmeta_all_of_fields_value.go
+        msg: "swagger_software/model_issue_bean_editmeta_all_of_fields_value.go not found. Run 'task generate-swagger-software' first"
+    cmds:
+      # Fix HasDefaultValue field/method name collision in model_field_metadata.go
+      - perl -i -pe 's/HasDefaultValue \*bool/HasDefaultValueFlag *bool/g' swagger_software/model_field_metadata.go
+      - perl -i -pe 's/o\.HasDefaultValue\)/o.HasDefaultValueFlag)/g' swagger_software/model_field_metadata.go
+      - perl -i -pe 's/o\.HasDefaultValue,/o.HasDefaultValueFlag,/g' swagger_software/model_field_metadata.go
+      - perl -i -pe 's/o\.HasDefaultValue =/o.HasDefaultValueFlag =/g' swagger_software/model_field_metadata.go
+      - perl -i -pe 's/= o\.HasDefaultValue$/= o.HasDefaultValueFlag/g' swagger_software/model_field_metadata.go
+      - perl -i -pe 's/\*o\.HasDefaultValue$/*o.HasDefaultValueFlag/g' swagger_software/model_field_metadata.go
+      # Fix HasDefaultValue field/method name collision in model_issue_bean_editmeta_all_of_fields_value.go
+      - perl -i -pe 's/HasDefaultValue \*bool/HasDefaultValueFlag *bool/g' swagger_software/model_issue_bean_editmeta_all_of_fields_value.go
+      - perl -i -pe 's/o\.HasDefaultValue\)/o.HasDefaultValueFlag)/g' swagger_software/model_issue_bean_editmeta_all_of_fields_value.go
+      - perl -i -pe 's/o\.HasDefaultValue,/o.HasDefaultValueFlag,/g' swagger_software/model_issue_bean_editmeta_all_of_fields_value.go
+      - perl -i -pe 's/o\.HasDefaultValue =/o.HasDefaultValueFlag =/g' swagger_software/model_issue_bean_editmeta_all_of_fields_value.go
+      - perl -i -pe 's/= o\.HasDefaultValue$/= o.HasDefaultValueFlag/g' swagger_software/model_issue_bean_editmeta_all_of_fields_value.go
+      - perl -i -pe 's/\*o\.HasDefaultValue$/*o.HasDefaultValueFlag/g' swagger_software/model_issue_bean_editmeta_all_of_fields_value.go
