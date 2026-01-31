@@ -37,11 +37,13 @@ func runGetIssue(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	summaryObject := issue.Fields["summary"]
-	summary := fmt.Sprintf("%v", summaryObject)
-
 	color.NoColor = noColor
 	yellow := color.New(color.FgYellow).SprintFunc()
+	cyan := color.New(color.FgCyan).SprintFunc()
+	magenta := color.New(color.FgMagenta).SprintFunc()
+
+	summaryObject := issue.Fields["summary"]
+	summary := fmt.Sprintf("%v", summaryObject)
 
 	summaryLine := fmt.Sprintf("%s %s", *issue.Key, yellow(summary))
 	fmt.Println(summaryLine)
@@ -58,7 +60,145 @@ func runGetIssue(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	// Display linked issues
+	issueLinksObject := issue.Fields["issuelinks"]
+	if issueLinksObject != nil {
+		links := extractIssueLinks(issueLinksObject, *issue.Key)
+		if len(links) > 0 {
+			fmt.Printf("\n%s\n", cyan("Linked Issues:"))
+			for _, link := range links {
+				fmt.Printf("  %s %s %s\n", magenta(link.linkType), yellow(link.key), link.summary)
+			}
+		}
+	}
+
+	// Display subtasks/child issues
+	subtasksObject := issue.Fields["subtasks"]
+	if subtasksObject != nil {
+		subtasks := extractSubtasks(subtasksObject)
+		if len(subtasks) > 0 {
+			fmt.Printf("\n%s\n", cyan("Sub-tasks:"))
+			for _, subtask := range subtasks {
+				statusStr := ""
+				if subtask.status != "" {
+					statusStr = fmt.Sprintf(" [%s]", magenta(subtask.status))
+				}
+				fmt.Printf("  %s %s%s\n", yellow(subtask.key), subtask.summary, statusStr)
+			}
+		}
+	}
+
 	return nil
+}
+
+type issueLink struct {
+	linkType string
+	key      string
+	summary  string
+}
+
+type subtaskInfo struct {
+	key     string
+	summary string
+	status  string
+}
+
+// extractIssueLinks extracts linked issues from the issuelinks field
+func extractIssueLinks(issueLinksObj any, currentKey string) []issueLink {
+	linksArray, ok := issueLinksObj.([]any)
+	if !ok {
+		return nil
+	}
+
+	var links []issueLink
+	for _, linkObj := range linksArray {
+		linkMap, ok := linkObj.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		var link issueLink
+
+		// Get link type
+		typeObj, ok := linkMap["type"].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		// Determine if this is an inward or outward link
+		if inwardIssue, ok := linkMap["inwardIssue"].(map[string]any); ok {
+			// Current issue is the outward issue, linked issue is inward
+			if inward, ok := typeObj["inward"].(string); ok {
+				link.linkType = inward
+			}
+			if key, ok := inwardIssue["key"].(string); ok {
+				link.key = key
+			}
+			if fields, ok := inwardIssue["fields"].(map[string]any); ok {
+				if summary, ok := fields["summary"].(string); ok {
+					link.summary = summary
+				}
+			}
+		} else if outwardIssue, ok := linkMap["outwardIssue"].(map[string]any); ok {
+			// Current issue is the inward issue, linked issue is outward
+			if outward, ok := typeObj["outward"].(string); ok {
+				link.linkType = outward
+			}
+			if key, ok := outwardIssue["key"].(string); ok {
+				link.key = key
+			}
+			if fields, ok := outwardIssue["fields"].(map[string]any); ok {
+				if summary, ok := fields["summary"].(string); ok {
+					link.summary = summary
+				}
+			}
+		}
+
+		if link.key != "" && link.key != currentKey {
+			links = append(links, link)
+		}
+	}
+
+	return links
+}
+
+// extractSubtasks extracts subtasks/child issues from the subtasks field
+func extractSubtasks(subtasksObj any) []subtaskInfo {
+	subtasksArray, ok := subtasksObj.([]any)
+	if !ok {
+		return nil
+	}
+
+	var subtasks []subtaskInfo
+	for _, subtaskObj := range subtasksArray {
+		subtaskMap, ok := subtaskObj.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		var subtask subtaskInfo
+
+		if key, ok := subtaskMap["key"].(string); ok {
+			subtask.key = key
+		}
+
+		if fields, ok := subtaskMap["fields"].(map[string]any); ok {
+			if summary, ok := fields["summary"].(string); ok {
+				subtask.summary = summary
+			}
+			if status, ok := fields["status"].(map[string]any); ok {
+				if name, ok := status["name"].(string); ok {
+					subtask.status = name
+				}
+			}
+		}
+
+		if subtask.key != "" {
+			subtasks = append(subtasks, subtask)
+		}
+	}
+
+	return subtasks
 }
 
 // extractTextFromADF extracts plain text from Atlassian Document Format (ADF)
