@@ -9,6 +9,7 @@ This document provides guidelines for AI coding agents working in this repositor
 - **CLI Framework**: Cobra (github.com/spf13/cobra)
 - **Configuration**: Viper (github.com/spf13/viper)
 - **API Client**: Auto-generated Swagger client for Jira Cloud REST API v3
+- **API Reference**: See `jira_apis.md` for a description of available Jira APIs
 
 ## Build, Test, and Lint Commands
 
