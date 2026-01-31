@@ -4,36 +4,36 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alexhokl/jira-cli/swagger"
 	"github.com/spf13/cobra"
+
+	"github.com/alexhokl/jira-cli/swagger"
 )
 
-type addCommentOptions struct {
+type createCommentOptions struct {
 	id      string
 	message string
 }
 
-var addCommentOpts = addCommentOptions{}
+var createCommentOpts = createCommentOptions{}
 
-// addCommentCmd represents the comment command
-var addCommentCmd = &cobra.Command{
+var createCommentCmd = &cobra.Command{
 	Use:   "comment",
-	Short: "Add a comment",
-	RunE:  runAddComment,
+	Short: "Create a comment",
+	RunE:  runCreateComment,
 }
 
 func init() {
-	addCmd.AddCommand(addCommentCmd)
+	createCmd.AddCommand(createCommentCmd)
 
-	flags := addCommentCmd.Flags()
-	flags.StringVarP(&addCommentOpts.id, "id", "i", "", "Issue ID")
-	flags.StringVarP(&addCommentOpts.message, "message", "m", "", "Message")
+	flags := createCommentCmd.Flags()
+	flags.StringVarP(&createCommentOpts.id, "id", "i", "", "Issue ID")
+	flags.StringVarP(&createCommentOpts.message, "message", "m", "", "Message")
 
-	addCommentCmd.MarkFlagRequired("id")
+	createCommentCmd.MarkFlagRequired("id")
 }
 
-func runAddComment(_ *cobra.Command, _ []string) error {
-	message := addCommentOpts.message
+func runCreateComment(_ *cobra.Command, _ []string) error {
+	message := createCommentOpts.message
 	if strings.TrimSpace(message) == "" {
 		var err error
 		message, err = getMessageFromEditor()
@@ -47,11 +47,11 @@ func runAddComment(_ *cobra.Command, _ []string) error {
 
 	body := newComment(message)
 	client := newClient()
-	_, _, err := client.IssueCommentsAPI.AddComment(getAuthContext(), addCommentOpts.id).Comment(*body).Execute()
+	_, _, err := client.IssueCommentsAPI.AddComment(getAuthContext(), createCommentOpts.id).Comment(*body).Execute()
 	if err != nil {
 		return err
 	}
-	fmt.Println("Comment added")
+	fmt.Println("Comment created")
 	return nil
 }
 
