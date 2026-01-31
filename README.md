@@ -15,6 +15,10 @@ email: some_user@testing.com
 api_key: key_from_jira
 ```
 
+### Stub documentation
+
+- [JIRA Cloud Platform REST API and Software Platform REST API](./jira_apis.md)
+
 ### References
 
 - [Normal API
