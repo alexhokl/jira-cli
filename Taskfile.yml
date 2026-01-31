@@ -36,12 +36,13 @@ tasks:
       - open coverage.html
 
   pull-swagger:
-    desc: Pull Jira API swagger definition
+    desc: Pull Jira API swagger definitions (Platform and Software)
     preconditions:
       - sh: command -v curl
         msg: "curl is required but not installed"
     cmds:
       - curl -o swagger.json -sSL https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json
+      - curl -o swagger_software.json -sSL https://dac-static.atlassian.com/cloud/jira/software/swagger.v3.json
 
   generate-swagger:
     desc: Generate Go client from swagger.json using openapi-generator
