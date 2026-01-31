@@ -1,15 +1,15 @@
 # Jira Cloud REST API v3 - Available Endpoints
 
 This document summarizes the API endpoints available in the auto-generated
-Swagger client (`swagger/` directory).
+Swagger clients.
 
-> **Note:** This client is generated from the **Jira Cloud Platform REST API
-> v3**. It does NOT include Agile/Software APIs (sprints, boards, backlogs)
-> which are part of a separate API.
+> **Note:** This document covers two API clients:
+> - **Jira Cloud Platform REST API v3** (`swagger/` directory)
+> - **Jira Software REST API** (`swagger_software/` directory)
 
 ---
 
-## Table of Contents
+## Table of Contents (Platform API)
 
 - [Issues](#issues)
 - [Issue Search](#issue-search)
@@ -1223,21 +1223,277 @@ Swagger client (`swagger/` directory).
 
 ---
 
+# Jira Software (Agile) REST API - Available Endpoints
+
+This section summarizes the API endpoints available in the auto-generated
+Swagger client (`swagger_software/` directory).
+
+> **Note:** This client is generated from the **Jira Software REST API**
+> (Agile API). It provides access to boards, sprints, backlogs, epics, and
+> DevOps-related features.
+
+---
+
+## Table of Contents (Software API)
+
+- [Backlog](#backlog)
+- [Board](#board)
+- [Sprint](#sprint)
+- [Epic](#epic)
+- [Issue (Agile)](#issue-agile)
+- [Builds](#builds)
+- [Deployments](#deployments)
+- [Development Information](#development-information)
+- [Feature Flags](#feature-flags)
+- [Remote Links](#remote-links)
+- [Operations](#operations)
+- [Security Information](#security-information)
+- [DevOps Components](#devops-components)
+
+---
+
+## Backlog
+
+**Service:** `BacklogAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `MoveIssuesToBacklog` | Move issues to the backlog |
+| `MoveIssuesToBacklogForBoard` | Move issues to backlog for a specific board |
+
+---
+
+## Board
+
+**Service:** `BoardAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `CreateBoard` | Create a new board |
+| `DeleteBoard` | Delete a board |
+| `GetAllBoards` | Get all boards |
+| `GetBoard` | Get a specific board |
+| `GetBoardByFilterId` | Get board by filter ID |
+| `GetConfiguration` | Get board configuration |
+| `GetFeaturesForBoard` | Get features for a board |
+| `ToggleFeatures` | Toggle board features |
+| `GetAllSprints` | Get all sprints for a board |
+| `GetAllVersions` | Get all versions for a board |
+| `GetEpics` | Get epics for a board |
+| `GetIssuesForBoard` | Get issues for a board |
+| `GetIssuesForBacklog` | Get backlog issues for a board |
+| `GetIssuesWithoutEpicForBoard` | Get issues without epic for a board |
+| `GetBoardIssuesForEpic` | Get board issues for an epic |
+| `GetBoardIssuesForSprint` | Get board issues for a sprint |
+| `MoveIssuesToBoard` | Move issues to a board |
+| `GetProjects` | Get projects for a board |
+| `GetProjectsFull` | Get full project details for a board |
+| `GetAllQuickFilters` | Get all quick filters for a board |
+| `GetQuickFilter` | Get a specific quick filter |
+| `GetReportsForBoard` | Get reports for a board |
+| `GetBoardPropertyKeys` | Get board property keys |
+| `GetBoardProperty` | Get a board property |
+| `SetBoardProperty` | Set a board property |
+| `DeleteBoardProperty` | Delete a board property |
+
+---
+
+## Sprint
+
+**Service:** `SprintAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `CreateSprint` | Create a new sprint |
+| `GetSprint` | Get a sprint |
+| `UpdateSprint` | Fully update a sprint |
+| `PartiallyUpdateSprint` | Partially update a sprint |
+| `DeleteSprint` | Delete a sprint |
+| `GetIssuesForSprint` | Get issues for a sprint |
+| `MoveIssuesToSprintAndRank` | Move issues to sprint and rank them |
+| `SwapSprint` | Swap sprint with another |
+| `GetPropertiesKeys` | Get sprint property keys |
+| `GetProperty` | Get a sprint property |
+| `SetProperty` | Set a sprint property |
+| `DeleteProperty` | Delete a sprint property |
+
+---
+
+## Epic
+
+**Service:** `EpicAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `GetEpic` | Get an epic |
+| `PartiallyUpdateEpic` | Partially update an epic |
+| `GetIssuesForEpic` | Get issues for an epic |
+| `GetIssuesWithoutEpic` | Get issues without an epic |
+| `MoveIssuesToEpic` | Move issues to an epic |
+| `RemoveIssuesFromEpic` | Remove issues from an epic |
+| `RankEpics` | Rank epics |
+
+---
+
+## Issue (Agile)
+
+**Service:** `IssueAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `GetIssue` | Get agile issue details |
+| `RankIssues` | Rank issues |
+| `GetIssueEstimationForBoard` | Get issue estimation for a board |
+| `EstimateIssueForBoard` | Set issue estimation for a board |
+
+---
+
+## Builds
+
+**Service:** `BuildsAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `SubmitBuilds` | Submit build information |
+| `GetBuildByKey` | Get build by key |
+| `DeleteBuildByKey` | Delete build by key |
+| `DeleteBuildsByProperty` | Delete builds by property |
+
+---
+
+## Deployments
+
+**Service:** `DeploymentsAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `SubmitDeployments` | Submit deployment information |
+| `GetDeploymentByKey` | Get deployment by key |
+| `GetDeploymentGatingStatusByKey` | Get deployment gating status |
+| `DeleteDeploymentByKey` | Delete deployment by key |
+| `DeleteDeploymentsByProperty` | Delete deployments by property |
+
+---
+
+## Development Information
+
+**Service:** `DevelopmentInformationAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `StoreDevelopmentInformation` | Store development information |
+| `GetRepository` | Get repository information |
+| `DeleteRepository` | Delete repository |
+| `DeleteEntity` | Delete a development entity |
+| `DeleteByProperties` | Delete by properties |
+| `ExistsByProperties` | Check if data exists by properties |
+
+---
+
+## Feature Flags
+
+**Service:** `FeatureFlagsAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `SubmitFeatureFlags` | Submit feature flag information |
+| `GetFeatureFlagById` | Get feature flag by ID |
+| `DeleteFeatureFlagById` | Delete feature flag by ID |
+| `DeleteFeatureFlagsByProperty` | Delete feature flags by property |
+
+---
+
+## Remote Links
+
+**Service:** `RemoteLinksAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `SubmitRemoteLinks` | Submit remote links |
+| `GetRemoteLinkById` | Get remote link by ID |
+| `DeleteRemoteLinkById` | Delete remote link by ID |
+| `DeleteRemoteLinksByProperty` | Delete remote links by property |
+
+---
+
+## Operations
+
+**Service:** `OperationsAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `SubmitEntity` | Submit incidents/reviews |
+| `GetIncidentById` | Get incident by ID |
+| `DeleteIncidentById` | Delete incident by ID |
+| `GetReviewById` | Get review by ID |
+| `DeleteReviewById` | Delete review by ID |
+| `DeleteEntityByProperty` | Delete entities by property |
+| `SubmitOperationsWorkspaces` | Submit operations workspaces |
+| `GetWorkspaces` | Get operations workspaces |
+| `DeleteWorkspaces` | Delete operations workspaces |
+
+---
+
+## Security Information
+
+**Service:** `SecurityInformationAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `SubmitVulnerabilities` | Submit vulnerability information |
+| `GetVulnerabilityById` | Get vulnerability by ID |
+| `DeleteVulnerabilityById` | Delete vulnerability by ID |
+| `DeleteVulnerabilitiesByProperty` | Delete vulnerabilities by property |
+| `SubmitWorkspaces` | Submit security workspaces |
+| `GetLinkedWorkspaces` | Get linked workspaces |
+| `GetLinkedWorkspaceById` | Get linked workspace by ID |
+| `DeleteLinkedWorkspaces` | Delete linked workspaces |
+
+---
+
+## DevOps Components
+
+**Service:** `DevOpsComponentsAPIService`
+
+| Method | Description |
+|--------|-------------|
+| `SubmitComponents` | Submit DevOps components |
+| `GetComponentById` | Get component by ID |
+| `DeleteComponentById` | Delete component by ID |
+| `DeleteComponentsByProperty` | Delete components by property |
+
+---
+
 ## Notes
 
 1. **Authentication**: All API calls require authentication via the
    `getAuthContext()` helper function in `cmd/helper.go`.
 
-2. **Client Creation**: Use `newClient()` from `cmd/helper.go` to create the API
-   client.
+2. **Client Creation**: Use `newClient()` from `cmd/helper.go` to create the
+   Platform API client. For Software API, create a separate client using the
+   `swagger_software` package.
 
-3. **Missing APIs**: The following Jira APIs are NOT included in this client:
-   - **Jira Software (Agile) API**: Sprints, Boards, Backlogs, Epics
+3. **Available APIs**:
+   - **Jira Cloud Platform REST API v3** (`swagger/`): Issues, projects,
+     workflows, users, permissions, and more.
+   - **Jira Software REST API** (`swagger_software/`): Boards, sprints,
+     backlogs, epics, builds, deployments, and DevOps features.
+
+4. **Not Included**:
    - **Jira Service Management API**: Service desk, queues, SLAs
 
-4. **Usage Example**:
+5. **Usage Example (Platform API)**:
    ```go
    client := newClient()
    ctx := getAuthContext()
    issue, _, err := client.IssuesAPI.GetIssue(ctx, "PROJECT-123").Execute()
+   ```
+
+6. **Usage Example (Software API)**:
+   ```go
+   import "github.com/alexhokl/jira-cli/swagger_software"
+
+   cfg := swagger_software.NewConfiguration()
+   client := swagger_software.NewAPIClient(cfg)
+   boards, _, err := client.BoardAPI.GetAllBoards(ctx).Execute()
    ```
