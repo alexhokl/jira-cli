@@ -16,6 +16,7 @@ require (
 
 require (
 	github.com/alexhokl/jira-cli/swagger v0.0.0-00010101000000-000000000000
+	github.com/alexhokl/jira-cli/swagger_software v0.0.0-00010101000000-000000000000
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -34,3 +35,5 @@ require (
 )
 
 replace github.com/alexhokl/jira-cli/swagger => ./swagger
+
+replace github.com/alexhokl/jira-cli/swagger_software => ./swagger_software

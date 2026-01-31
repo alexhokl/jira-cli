@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/alexhokl/jira-cli/swagger"
+	"github.com/alexhokl/jira-cli/swagger_software"
 	"github.com/spf13/viper"
 )
 
@@ -82,6 +83,32 @@ func getConfiguration() *swagger.Configuration {
 
 func newClient() *swagger.APIClient {
 	return swagger.NewAPIClient(getConfiguration())
+}
+
+func getSoftwareAuthContext() context.Context {
+	email := viper.GetString("email")
+	apiKey := viper.GetString("api_key")
+
+	auth := swagger_software.BasicAuth{
+		UserName: email,
+		Password: apiKey,
+	}
+
+	ctx := context.WithValue(context.Background(), swagger_software.ContextBasicAuth, auth)
+	return ctx
+}
+
+func getSoftwareConfiguration() *swagger_software.Configuration {
+	configuration := swagger_software.NewConfiguration()
+	configuration.Servers[0].URL = fmt.Sprintf("https://%s.atlassian.net", viper.GetString("organization"))
+	configuration.HTTPClient = &http.Client{
+		Transport: &timeFixTransport{},
+	}
+	return configuration
+}
+
+func newSoftwareClient() *swagger_software.APIClient {
+	return swagger_software.NewAPIClient(getSoftwareConfiguration())
 }
 
 func getMessageFromEditor() (string, error) {
