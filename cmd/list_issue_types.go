@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"text/tabwriter"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -107,8 +106,8 @@ func runListIssueTypes(_ *cobra.Command, _ []string) error {
 	yellow := color.New(color.FgYellow).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", cyan("ID"), cyan("NAME"), cyan("PROJECT"), cyan("SUBTASK"), cyan("DESCRIPTION"))
+	w := newTableWriter(os.Stdout, 0, 2)
+	w.row(cyan("ID"), cyan("NAME"), cyan("PROJECT"), cyan("SUBTASK"), cyan("DESCRIPTION"))
 
 	for _, t := range issueTypes {
 		subtaskStr := "No"
@@ -124,9 +123,9 @@ func runListIssueTypes(_ *cobra.Command, _ []string) error {
 		if len(desc) > 50 {
 			desc = desc[:47] + "..."
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", t.id, yellow(t.name), projectStr, subtaskStr, desc)
+		w.row(t.id, yellow(t.name), projectStr, subtaskStr, desc)
 	}
-	w.Flush()
+	w.flush()
 
 	fmt.Printf("\nFound %d issue types\n", len(issueTypes))
 
