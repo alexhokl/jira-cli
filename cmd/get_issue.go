@@ -1,15 +1,19 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"sort"
 	"strings"
 
+	"github.com/alexhokl/jira-cli/swagger"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
 type getIssueOptions struct {
-	id string
+	id               string
+	showCustomFields bool
 }
 
 var getIssueOpts = getIssueOptions{}
@@ -18,7 +22,15 @@ var getIssueOpts = getIssueOptions{}
 var getIssueCmd = &cobra.Command{
 	Use:   "issue",
 	Short: "Get issue",
-	RunE:  runGetIssue,
+	Long: `Get details of a specific issue.
+
+Examples:
+  # Get issue details
+  jira-cli get issue -i PROJ-123
+
+  # Get issue details including custom fields
+  jira-cli get issue -i PROJ-123 --show-custom-fields`,
+	RunE: runGetIssue,
 }
 
 func init() {
@@ -26,6 +38,7 @@ func init() {
 
 	flags := getIssueCmd.Flags()
 	flags.StringVarP(&getIssueOpts.id, "id", "i", "", "Issue ID")
+	flags.BoolVarP(&getIssueOpts.showCustomFields, "show-custom-fields", "c", false, "Show custom field values")
 
 	getIssueCmd.MarkFlagRequired("id")
 }
@@ -57,6 +70,29 @@ func runGetIssue(_ *cobra.Command, _ []string) error {
 		description := extractTextFromADF(descriptionObject)
 		if description != "" {
 			fmt.Printf("\n%s\n", description)
+		}
+	}
+
+	// Display labels
+	labelsObject := issue.Fields["labels"]
+	if labelsObject != nil {
+		labels := extractLabels(labelsObject)
+		if len(labels) > 0 {
+			fmt.Printf("\n%s %s\n", cyan("Labels:"), yellow(strings.Join(labels, ", ")))
+		}
+	}
+
+	// Display custom fields (if flag is set)
+	if getIssueOpts.showCustomFields {
+		fieldNameMap, err := getFieldNameMap(client, getAuthContext())
+		if err == nil {
+			customFields := extractIssueCustomFields(issue.Fields, fieldNameMap)
+			if len(customFields) > 0 {
+				fmt.Printf("\n%s\n", cyan("Custom Fields:"))
+				for _, cf := range customFields {
+					fmt.Printf("  %s: %s\n", yellow(cf.name), cf.value)
+				}
+			}
 		}
 	}
 
@@ -101,6 +137,23 @@ type subtaskInfo struct {
 	key     string
 	summary string
 	status  string
+}
+
+// extractLabels extracts labels from the labels field
+func extractLabels(labelsObj any) []string {
+	labelsArray, ok := labelsObj.([]any)
+	if !ok {
+		return nil
+	}
+
+	var labels []string
+	for _, labelObj := range labelsArray {
+		if label, ok := labelObj.(string); ok {
+			labels = append(labels, label)
+		}
+	}
+
+	return labels
 }
 
 // extractIssueLinks extracts linked issues from the issuelinks field
@@ -199,6 +252,106 @@ func extractSubtasks(subtasksObj any) []subtaskInfo {
 	}
 
 	return subtasks
+}
+
+type customFieldValue struct {
+	name  string
+	value string
+}
+
+// getFieldNameMap fetches all fields and returns a map of custom field ID -> name
+func getFieldNameMap(client *swagger.APIClient, ctx context.Context) (map[string]string, error) {
+	fields, _, err := client.IssueFieldsAPI.GetFields(ctx).Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	nameMap := make(map[string]string)
+	for _, field := range fields {
+		if field.GetCustom() {
+			nameMap[field.GetId()] = field.GetName()
+		}
+	}
+	return nameMap, nil
+}
+
+// extractIssueCustomFields extracts custom field values from issue fields
+func extractIssueCustomFields(fields map[string]any, nameMap map[string]string) []customFieldValue {
+	var result []customFieldValue
+
+	for fieldId, value := range fields {
+		if !strings.HasPrefix(fieldId, "customfield_") {
+			continue
+		}
+		if value == nil {
+			continue
+		}
+
+		name := nameMap[fieldId]
+		if name == "" {
+			name = fieldId
+		}
+
+		valueStr := formatCustomFieldValue(value)
+		if valueStr != "" {
+			result = append(result, customFieldValue{name: name, value: valueStr})
+		}
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].name < result[j].name
+	})
+
+	return result
+}
+
+// formatCustomFieldValue converts various custom field value types to string
+func formatCustomFieldValue(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case float64:
+		if v == float64(int64(v)) {
+			return fmt.Sprintf("%d", int64(v))
+		}
+		return fmt.Sprintf("%v", v)
+	case bool:
+		return fmt.Sprintf("%v", v)
+	case map[string]any:
+		if name, ok := v["displayName"].(string); ok {
+			return name
+		}
+		if val, ok := v["value"].(string); ok {
+			return val
+		}
+		if name, ok := v["name"].(string); ok {
+			return name
+		}
+		return fmt.Sprintf("%v", v)
+	case []any:
+		var values []string
+		for _, item := range v {
+			if m, ok := item.(map[string]any); ok {
+				if val, ok := m["value"].(string); ok {
+					values = append(values, val)
+				} else if name, ok := m["displayName"].(string); ok {
+					values = append(values, name)
+				} else if name, ok := m["name"].(string); ok {
+					values = append(values, name)
+				}
+			} else if s, ok := item.(string); ok {
+				values = append(values, s)
+			}
+		}
+		if len(values) > 0 {
+			return strings.Join(values, ", ")
+		}
+		return ""
+	default:
+		return fmt.Sprintf("%v", value)
+	}
 }
 
 // extractTextFromADF extracts plain text from Atlassian Document Format (ADF)
