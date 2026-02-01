@@ -7,7 +7,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -133,20 +132,20 @@ func runListCustomFields(_ *cobra.Command, _ []string) error {
 	yellow := color.New(color.FgYellow).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newTableWriter(os.Stdout, 0, 2)
 
 	if listCustomFieldsOpts.showContexts {
-		fmt.Fprintln(w, cyan("ID\tNAME\tTYPE\tSCHEMA\tISSUE TYPES"))
+		w.row(cyan("ID"), cyan("NAME"), cyan("TYPE"), cyan("SCHEMA"), cyan("ISSUE TYPES"))
 		for _, f := range customFields {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", f.id, yellow(f.name), f.fieldType, f.schema, f.issueTypes)
+			w.row(f.id, yellow(f.name), f.fieldType, f.schema, f.issueTypes)
 		}
 	} else {
-		fmt.Fprintln(w, cyan("ID\tNAME\tTYPE\tSCHEMA"))
+		w.row(cyan("ID"), cyan("NAME"), cyan("TYPE"), cyan("SCHEMA"))
 		for _, f := range customFields {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", f.id, yellow(f.name), f.fieldType, f.schema)
+			w.row(f.id, yellow(f.name), f.fieldType, f.schema)
 		}
 	}
-	w.Flush()
+	w.flush()
 
 	fmt.Printf("\nFound %d custom fields\n", len(customFields))
 
