@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -23,6 +25,7 @@ type updateIssueOptions struct {
 	noNotify     bool
 	linkIssue    string
 	linkType     string
+	customFields []string
 }
 
 var updateIssueOpts = updateIssueOptions{}
@@ -65,7 +68,19 @@ Examples:
 
   # Link to another issue (this issue blocks PROJ-456)
   # Use 'jira-cli list link-types' to see available link type names
-  jira-cli update issue --key PROJ-123 --link-issue PROJ-456 --link-type Blocks`,
+  jira-cli update issue --key PROJ-123 --link-issue PROJ-456 --link-type Blocks
+
+  # Update a custom field (text field)
+  jira-cli update issue --key PROJ-123 --custom-field "Team=Backend"
+
+  # Update multiple custom fields
+  jira-cli update issue --key PROJ-123 --custom-field "Team=Backend" --custom-field "Story Points=5"
+
+  # Update a select list custom field (use the option value)
+  jira-cli update issue --key PROJ-123 --custom-field "Environment=Production"
+
+  # Clear a custom field value
+  jira-cli update issue --key PROJ-123 --custom-field "Team="`,
 	RunE: runUpdateIssue,
 }
 
@@ -86,6 +101,7 @@ func init() {
 	flags.BoolVar(&updateIssueOpts.noNotify, "no-notify", false, "Don't send notification emails")
 	flags.StringVar(&updateIssueOpts.linkIssue, "link-issue", "", "Issue key to link to (e.g., PROJ-456)")
 	flags.StringVar(&updateIssueOpts.linkType, "link-type", "", "Link type name (use 'jira-cli list link-types' to see available types)")
+	flags.StringArrayVar(&updateIssueOpts.customFields, "custom-field", nil, "Custom field to update in format 'name=value' (can be specified multiple times)")
 
 	updateIssueCmd.MarkFlagRequired("key")
 }
@@ -101,7 +117,8 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		len(updateIssueOpts.deleteLabels) == 0 &&
 		updateIssueOpts.components == "" &&
 		updateIssueOpts.dueDate == "" &&
-		updateIssueOpts.linkIssue == "" {
+		updateIssueOpts.linkIssue == "" &&
+		len(updateIssueOpts.customFields) == 0 {
 		return fmt.Errorf("at least one field must be specified to update")
 	}
 
@@ -114,6 +131,9 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 	if updateIssueOpts.linkIssue != "" && updateIssueOpts.linkType == "" {
 		return fmt.Errorf("--link-type is required when --link-issue is specified")
 	}
+
+	client := newClient()
+	ctx := getAuthContext()
 
 	fields := make(map[string]interface{})
 	update := make(map[string][]swagger.FieldUpdateOperation)
@@ -189,6 +209,39 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	// Handle custom fields
+	if len(updateIssueOpts.customFields) > 0 {
+		// Get field metadata to resolve names to IDs and determine field types
+		fieldInfoMap, err := getCustomFieldInfoMap(client, ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get custom field information: %w", err)
+		}
+
+		for _, cf := range updateIssueOpts.customFields {
+			// Parse the name=value format
+			eqIdx := strings.Index(cf, "=")
+			if eqIdx == -1 {
+				return fmt.Errorf("invalid custom field format %q: expected 'name=value'", cf)
+			}
+			fieldName := strings.TrimSpace(cf[:eqIdx])
+			fieldValue := cf[eqIdx+1:]
+
+			// Find the field by name
+			fieldInfo, found := findCustomFieldByName(fieldInfoMap, fieldName)
+			if !found {
+				return fmt.Errorf("custom field %q not found", fieldName)
+			}
+
+			// Convert the value to the appropriate format for the field type
+			convertedValue, err := convertCustomFieldValue(fieldValue, fieldInfo)
+			if err != nil {
+				return fmt.Errorf("failed to convert value for custom field %q: %w", fieldName, err)
+			}
+
+			fields[fieldInfo.id] = convertedValue
+		}
+	}
+
 	issueUpdateDetails := swagger.NewIssueUpdateDetails()
 	if len(fields) > 0 {
 		issueUpdateDetails.SetFields(fields)
@@ -196,9 +249,6 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 	if len(update) > 0 {
 		issueUpdateDetails.SetUpdate(update)
 	}
-
-	client := newClient()
-	ctx := getAuthContext()
 
 	// Handle issue field updates if any fields are being updated
 	hasFieldUpdates := len(fields) > 0 || len(update) > 0
@@ -242,4 +292,224 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 	}
 
 	return nil
+}
+
+// customFieldInfo holds information about a custom field for update operations
+type customFieldInfo struct {
+	id         string
+	name       string
+	schemaType string // The schema type (e.g., "string", "number", "option", "array")
+	itemType   string // For array types, the type of items
+	custom     string // The custom field type URI (e.g., "com.atlassian.jira.plugin.system.customfieldtypes:select")
+}
+
+// getCustomFieldInfoMap returns a map of field ID to customFieldInfo for all custom fields
+func getCustomFieldInfoMap(client *swagger.APIClient, ctx context.Context) (map[string]customFieldInfo, error) {
+	fields, _, err := client.IssueFieldsAPI.GetFields(ctx).Execute()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]customFieldInfo)
+	for _, field := range fields {
+		if !field.GetCustom() {
+			continue
+		}
+
+		info := customFieldInfo{
+			id:   field.GetId(),
+			name: field.GetName(),
+		}
+
+		if schema := field.Schema; schema != nil {
+			info.schemaType = schema.GetType()
+			info.itemType = schema.GetItems()
+			info.custom = schema.GetCustom()
+		}
+
+		result[field.GetId()] = info
+	}
+
+	return result, nil
+}
+
+// findCustomFieldByName searches for a custom field by name (case-insensitive)
+func findCustomFieldByName(fieldMap map[string]customFieldInfo, name string) (customFieldInfo, bool) {
+	for _, info := range fieldMap {
+		if strings.EqualFold(info.name, name) {
+			return info, true
+		}
+	}
+	return customFieldInfo{}, false
+}
+
+// convertCustomFieldValue converts a string value to the appropriate format for the custom field type
+func convertCustomFieldValue(value string, field customFieldInfo) (interface{}, error) {
+	// Empty value means clear the field
+	if value == "" {
+		return nil, nil
+	}
+
+	// Determine the field type from the custom field type URI
+	fieldType := extractFieldType(field.custom)
+
+	switch field.schemaType {
+	case "string":
+		return value, nil
+
+	case "number":
+		// Try to parse as float
+		f, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid number value: %w", err)
+		}
+		return f, nil
+
+	case "option":
+		// Single select - use value property
+		return map[string]interface{}{
+			"value": value,
+		}, nil
+
+	case "array":
+		// Handle array types based on item type
+		switch field.itemType {
+		case "option":
+			// Multi-select - parse comma-separated values
+			values := parseCommaSeparatedValues(value)
+			options := make([]map[string]interface{}, len(values))
+			for i, v := range values {
+				options[i] = map[string]interface{}{
+					"value": v,
+				}
+			}
+			return options, nil
+
+		case "string":
+			// Array of strings (like labels)
+			return parseCommaSeparatedValues(value), nil
+
+		case "user":
+			// Multi-user picker - parse comma-separated account IDs
+			accountIds := parseCommaSeparatedValues(value)
+			users := make([]map[string]interface{}, len(accountIds))
+			for i, id := range accountIds {
+				users[i] = map[string]interface{}{
+					"id": id,
+				}
+			}
+			return users, nil
+
+		default:
+			// Unknown array type - try as comma-separated values
+			return parseCommaSeparatedValues(value), nil
+		}
+
+	case "user":
+		// Single user picker
+		return map[string]interface{}{
+			"id": value,
+		}, nil
+
+	case "date":
+		// Date field - expect format YYYY-MM-DD
+		return value, nil
+
+	case "datetime":
+		// DateTime field - expect ISO format
+		return value, nil
+
+	default:
+		// Handle based on custom field type if schema type is not conclusive
+		switch fieldType {
+		case "select", "radiobuttons":
+			return map[string]interface{}{
+				"value": value,
+			}, nil
+
+		case "multiselect", "multicheckboxes":
+			values := parseCommaSeparatedValues(value)
+			options := make([]map[string]interface{}, len(values))
+			for i, v := range values {
+				options[i] = map[string]interface{}{
+					"value": v,
+				}
+			}
+			return options, nil
+
+		case "userpicker":
+			return map[string]interface{}{
+				"id": value,
+			}, nil
+
+		case "multiuserpicker":
+			accountIds := parseCommaSeparatedValues(value)
+			users := make([]map[string]interface{}, len(accountIds))
+			for i, id := range accountIds {
+				users[i] = map[string]interface{}{
+					"id": id,
+				}
+			}
+			return users, nil
+
+		case "cascadingselect":
+			// Cascading select expects parent and optionally child value
+			// Format: "Parent" or "Parent - Child"
+			parts := strings.SplitN(value, " - ", 2)
+			result := map[string]interface{}{
+				"value": strings.TrimSpace(parts[0]),
+			}
+			if len(parts) > 1 {
+				result["child"] = map[string]interface{}{
+					"value": strings.TrimSpace(parts[1]),
+				}
+			}
+			return result, nil
+
+		case "float":
+			f, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid number value: %w", err)
+			}
+			return f, nil
+
+		case "datepicker":
+			return value, nil
+
+		case "datetime":
+			return value, nil
+
+		case "url":
+			return value, nil
+
+		case "textarea", "textfield":
+			return value, nil
+
+		default:
+			// Default: return as-is
+			return value, nil
+		}
+	}
+}
+
+// extractFieldType extracts the short field type from a custom field type URI
+// e.g., "com.atlassian.jira.plugin.system.customfieldtypes:select" -> "select"
+func extractFieldType(customType string) string {
+	if idx := strings.LastIndex(customType, ":"); idx != -1 {
+		return customType[idx+1:]
+	}
+	return customType
+}
+
+// parseCommaSeparatedValues splits a string by commas and trims whitespace
+func parseCommaSeparatedValues(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
