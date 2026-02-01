@@ -73,6 +73,19 @@ func runGetIssue(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	// Display assignee and reporter
+	assignee := extractUserDisplayName(issue.Fields["assignee"])
+	reporter := extractUserDisplayName(issue.Fields["reporter"])
+	if assignee != "" || reporter != "" {
+		fmt.Println()
+		if assignee != "" {
+			fmt.Printf("%s %s\n", cyan("Assignee:"), yellow(assignee))
+		}
+		if reporter != "" {
+			fmt.Printf("%s %s\n", cyan("Reporter:"), yellow(reporter))
+		}
+	}
+
 	// Display labels
 	labelsObject := issue.Fields["labels"]
 	if labelsObject != nil {
@@ -154,6 +167,29 @@ func extractLabels(labelsObj any) []string {
 	}
 
 	return labels
+}
+
+// extractUserDisplayName extracts the display name from a user field (assignee, reporter, etc.)
+func extractUserDisplayName(userObj any) string {
+	if userObj == nil {
+		return ""
+	}
+
+	userMap, ok := userObj.(map[string]any)
+	if !ok {
+		return ""
+	}
+
+	if displayName, ok := userMap["displayName"].(string); ok {
+		return displayName
+	}
+
+	// Fallback to emailAddress if displayName is not available
+	if email, ok := userMap["emailAddress"].(string); ok {
+		return email
+	}
+
+	return ""
 }
 
 // extractIssueLinks extracts linked issues from the issuelinks field
