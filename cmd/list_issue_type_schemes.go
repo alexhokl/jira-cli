@@ -5,7 +5,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -75,6 +74,72 @@ func runListIssueTypeSchemes(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	// Build a map of scheme ID to project keys
+	schemeProjects := make(map[string][]string)
+
+	// Get all projects first
+	projects, _, err := client.ProjectsAPI.GetAllProjects(ctx).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to get projects: %w", err)
+	}
+
+	// Build project ID to key map
+	projectIdToKey := make(map[string]string)
+	var projectIds []int64
+	for _, p := range projects {
+		projectIdToKey[p.GetId()] = p.GetKey()
+		var id int64
+		fmt.Sscanf(p.GetId(), "%d", &id)
+		projectIds = append(projectIds, id)
+	}
+
+	// Get scheme-to-project mappings in batches
+	if len(projectIds) > 0 {
+		batchSize := 50
+		for i := 0; i < len(projectIds); i += batchSize {
+			end := i + batchSize
+			if end > len(projectIds) {
+				end = len(projectIds)
+			}
+			batch := projectIds[i:end]
+
+			var mappingStartAt int64 = 0
+			for {
+				mappingResult, _, err := client.IssueTypeSchemesAPI.GetIssueTypeSchemeForProjects(ctx).
+					ProjectId(batch).
+					StartAt(mappingStartAt).
+					MaxResults(50).
+					Execute()
+				if err != nil {
+					// Non-fatal: continue without project mappings
+					break
+				}
+
+				for _, mapping := range mappingResult.GetValues() {
+					schemeId := mapping.IssueTypeScheme.GetId()
+					for _, projectId := range mapping.GetProjectIds() {
+						if key, ok := projectIdToKey[projectId]; ok {
+							schemeProjects[schemeId] = append(schemeProjects[schemeId], key)
+						}
+					}
+				}
+
+				if mappingResult.GetIsLast() || len(mappingResult.GetValues()) == 0 {
+					break
+				}
+				mappingStartAt += int64(len(mappingResult.GetValues()))
+			}
+		}
+	}
+
+	// Add project info to schemes
+	for i := range schemes {
+		if projects, ok := schemeProjects[schemes[i].id]; ok {
+			sort.Strings(projects)
+			schemes[i].projects = strings.Join(projects, ", ")
+		}
+	}
+
 	// Sort by name
 	sort.Slice(schemes, func(i, j int) bool {
 		return strings.ToLower(schemes[i].name) < strings.ToLower(schemes[j].name)
@@ -82,18 +147,23 @@ func runListIssueTypeSchemes(_ *cobra.Command, _ []string) error {
 
 	cyan := color.New(color.FgCyan).SprintFunc()
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, cyan("ID")+"\t"+cyan("NAME")+"\t"+cyan("DEFAULT")+"\t"+cyan("DESCRIPTION"))
+	w := newTableWriter(os.Stdout, 0, 2)
+	w.row(cyan("ID"), cyan("NAME"), cyan("DEFAULT"), cyan("PROJECTS"), cyan("DESCRIPTION"))
 
 	for _, s := range schemes {
 		// Truncate description if too long
 		desc := s.description
-		if len(desc) > 50 {
-			desc = desc[:47] + "..."
+		if len(desc) > 40 {
+			desc = desc[:37] + "..."
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", s.id, s.name, s.isDefault, desc)
+		// Truncate projects if too long
+		projects := s.projects
+		if len(projects) > 30 {
+			projects = projects[:27] + "..."
+		}
+		w.row(s.id, s.name, s.isDefault, projects, desc)
 	}
-	w.Flush()
+	w.flush()
 
 	fmt.Printf("\nFound %d issue type schemes\n", len(schemes))
 
@@ -105,4 +175,5 @@ type issueTypeSchemeInfo struct {
 	name        string
 	description string
 	isDefault   string
+	projects    string
 }
