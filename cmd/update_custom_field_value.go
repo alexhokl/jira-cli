@@ -13,6 +13,8 @@ type updateCustomFieldValueOptions struct {
 	fieldName string
 	oldValue  string
 	newValue  string
+	enable    bool
+	enableSet bool // tracks if --enable flag was explicitly set
 }
 
 var updateCustomFieldValueOpts = updateCustomFieldValueOptions{}
@@ -25,7 +27,7 @@ var updateCustomFieldValueCmd = &cobra.Command{
 This command modifies the options (allowed values) of a custom field itself,
 not the value of a custom field on an issue.
 
-This is useful for renaming options in select list custom fields.
+This is useful for renaming options or enabling/disabling them in select list custom fields.
 
 Note: This operation requires Jira administrator permissions.
 
@@ -34,7 +36,16 @@ Examples:
   jira-cli update custom-field-value --name "Environment" --old "Prod" --new "Production"
 
   # Update a team name option
-  jira-cli update custom-field-value --name "Team" --old "Backend Team" --new "Platform Team"`,
+  jira-cli update custom-field-value --name "Team" --old "Backend Team" --new "Platform Team"
+
+  # Disable an option (users can no longer select it)
+  jira-cli update custom-field-value --name "Environment" --old "Legacy" --enable=false
+
+  # Re-enable a disabled option
+  jira-cli update custom-field-value --name "Environment" --old "Legacy" --enable=true
+
+  # Rename and enable an option at the same time
+  jira-cli update custom-field-value --name "Environment" --old "Old" --new "Current" --enable=true`,
 	RunE: runUpdateCustomFieldValue,
 }
 
@@ -44,16 +55,24 @@ func init() {
 	flags := updateCustomFieldValueCmd.Flags()
 	flags.StringVarP(&updateCustomFieldValueOpts.fieldName, "name", "n", "", "Custom field name (required)")
 	flags.StringVarP(&updateCustomFieldValueOpts.oldValue, "old", "o", "", "Current option value (required)")
-	flags.StringVarP(&updateCustomFieldValueOpts.newValue, "new", "w", "", "New option value (required)")
+	flags.StringVarP(&updateCustomFieldValueOpts.newValue, "new", "w", "", "New option value")
+	flags.BoolVarP(&updateCustomFieldValueOpts.enable, "enable", "e", false, "Enable (true) or disable (false) the option")
 
 	updateCustomFieldValueCmd.MarkFlagRequired("name")
 	updateCustomFieldValueCmd.MarkFlagRequired("old")
-	updateCustomFieldValueCmd.MarkFlagRequired("new")
 }
 
-func runUpdateCustomFieldValue(_ *cobra.Command, _ []string) error {
+func runUpdateCustomFieldValue(cmd *cobra.Command, _ []string) error {
 	client := newClient()
 	ctx := getAuthContext()
+
+	// Check if --enable flag was explicitly set
+	enableSet := cmd.Flags().Changed("enable")
+
+	// Validate that at least one of --new or --enable is provided
+	if updateCustomFieldValueOpts.newValue == "" && !enableSet {
+		return fmt.Errorf("at least one of --new or --enable must be specified")
+	}
 
 	// Find the custom field by name
 	fieldId, err := findCustomFieldIdByName(client, ctx, updateCustomFieldValueOpts.fieldName)
@@ -104,7 +123,13 @@ func runUpdateCustomFieldValue(_ *cobra.Command, _ []string) error {
 
 		// Update the option
 		optionUpdate := swagger.NewCustomFieldOptionUpdate(optionId)
-		optionUpdate.SetValue(updateCustomFieldValueOpts.newValue)
+		if updateCustomFieldValueOpts.newValue != "" {
+			optionUpdate.SetValue(updateCustomFieldValueOpts.newValue)
+		}
+		if enableSet {
+			// disabled is the opposite of enable
+			optionUpdate.SetDisabled(!updateCustomFieldValueOpts.enable)
+		}
 
 		updateRequest := swagger.NewBulkCustomFieldOptionUpdateRequest()
 		updateRequest.SetOptions([]swagger.CustomFieldOptionUpdate{*optionUpdate})
@@ -120,11 +145,23 @@ func runUpdateCustomFieldValue(_ *cobra.Command, _ []string) error {
 			continue
 		}
 
-		fmt.Printf("Updated option in custom field %q (context: %s): %q -> %q\n",
+		// Build output message
+		var changes []string
+		if updateCustomFieldValueOpts.newValue != "" {
+			changes = append(changes, fmt.Sprintf("renamed %q -> %q", updateCustomFieldValueOpts.oldValue, updateCustomFieldValueOpts.newValue))
+		}
+		if enableSet {
+			if updateCustomFieldValueOpts.enable {
+				changes = append(changes, "enabled")
+			} else {
+				changes = append(changes, "disabled")
+			}
+		}
+
+		fmt.Printf("Updated option in custom field %q (context: %s): %s\n",
 			updateCustomFieldValueOpts.fieldName,
 			context.GetName(),
-			updateCustomFieldValueOpts.oldValue,
-			updateCustomFieldValueOpts.newValue)
+			strings.Join(changes, ", "))
 		updated = true
 	}
 

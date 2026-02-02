@@ -75,7 +75,7 @@ func TestUpdateCustomFieldValueOptionsValidation(t *testing.T) {
 	// Test that required fields are properly marked
 	cmd := updateCustomFieldValueCmd
 
-	// Check that name, old, and new flags exist
+	// Check that name, old, new, and enable flags exist
 	nameFlag := cmd.Flags().Lookup("name")
 	if nameFlag == nil {
 		t.Error("name flag not found")
@@ -90,6 +90,11 @@ func TestUpdateCustomFieldValueOptionsValidation(t *testing.T) {
 	if newFlag == nil {
 		t.Error("new flag not found")
 	}
+
+	enableFlag := cmd.Flags().Lookup("enable")
+	if enableFlag == nil {
+		t.Error("enable flag not found")
+	}
 }
 
 func TestUpdateCustomFieldValueShortFlags(t *testing.T) {
@@ -102,6 +107,7 @@ func TestUpdateCustomFieldValueShortFlags(t *testing.T) {
 		{"n", "name"},
 		{"o", "old"},
 		{"w", "new"},
+		{"e", "enable"},
 	}
 
 	for _, tt := range tests {
