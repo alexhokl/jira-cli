@@ -234,3 +234,12 @@ func (t *tableWriter) flush() {
 func legacyTabWriter() *tabwriter.Writer {
 	return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 }
+
+// normalizeUserValue converts user-friendly aliases to their API equivalents.
+// Specifically, it converts "me" to "currentUser()" for use in JQL queries.
+func normalizeUserValue(value string) string {
+	if value == "me" {
+		return "currentUser()"
+	}
+	return value
+}

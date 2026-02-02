@@ -58,7 +58,7 @@ func init() {
 	flags.StringVarP(&createIssueOpts.summary, "summary", "s", "", "Issue summary/title (required)")
 	flags.StringVarP(&createIssueOpts.descriptionFile, "description-file", "d", "", "Path to a file containing issue description in markdown")
 	flags.StringVar(&createIssueOpts.priority, "priority", "", "Priority (e.g., Highest, High, Medium, Low, Lowest)")
-	flags.StringVarP(&createIssueOpts.assignee, "assignee", "a", "", "Assignee account ID")
+	flags.StringVarP(&createIssueOpts.assignee, "assignee", "a", "", "Assignee account ID (use 'me' for yourself)")
 	flags.StringVarP(&createIssueOpts.labels, "labels", "l", "", "Comma-separated labels")
 	flags.StringVarP(&createIssueOpts.components, "components", "c", "", "Comma-separated component names")
 	flags.StringVar(&createIssueOpts.parent, "parent", "", "Parent issue key (for subtasks)")
@@ -110,8 +110,12 @@ func runCreateIssue(_ *cobra.Command, _ []string) error {
 	}
 
 	if createIssueOpts.assignee != "" {
+		assigneeId := createIssueOpts.assignee
+		if assigneeId == "me" {
+			assigneeId = currentUser.GetAccountId()
+		}
 		fields["assignee"] = map[string]any{
-			"id": createIssueOpts.assignee,
+			"id": assigneeId,
 		}
 	}
 

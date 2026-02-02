@@ -92,7 +92,7 @@ func init() {
 	flags.StringVarP(&updateIssueOpts.summary, "summary", "s", "", "Issue summary/title")
 	flags.StringVarP(&updateIssueOpts.description, "description", "d", "", "Issue description")
 	flags.StringVar(&updateIssueOpts.priority, "priority", "", "Priority (e.g., Highest, High, Medium, Low, Lowest)")
-	flags.StringVarP(&updateIssueOpts.assignee, "assignee", "a", "", "Assignee account ID (use 'none' to unassign)")
+	flags.StringVarP(&updateIssueOpts.assignee, "assignee", "a", "", "Assignee account ID (use 'me' for yourself, 'none' to unassign)")
 	flags.StringVarP(&updateIssueOpts.labels, "labels", "l", "", "Comma-separated labels (replaces existing)")
 	flags.StringArrayVar(&updateIssueOpts.addLabels, "add-label", nil, "Add a label (keeps existing, can be specified multiple times)")
 	flags.StringArrayVar(&updateIssueOpts.deleteLabels, "delete-label", nil, "Delete a label (keeps others, can be specified multiple times)")
@@ -156,8 +156,17 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		if updateIssueOpts.assignee == "none" {
 			fields["assignee"] = nil
 		} else {
+			assigneeId := updateIssueOpts.assignee
+			if assigneeId == "me" {
+				// Fetch current user's account ID
+				currentUser, _, err := client.MyselfAPI.GetCurrentUser(ctx).Execute()
+				if err != nil {
+					return fmt.Errorf("failed to get current user: %w", err)
+				}
+				assigneeId = currentUser.GetAccountId()
+			}
 			fields["assignee"] = map[string]interface{}{
-				"id": updateIssueOpts.assignee,
+				"id": assigneeId,
 			}
 		}
 	}

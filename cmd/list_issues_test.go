@@ -464,6 +464,14 @@ func TestBuildJQL(t *testing.T) {
 			expected: "project = MYPROJ AND assignee = currentUser() ORDER BY status DESC",
 		},
 		{
+			name: "project with me assignee (alias for currentUser)",
+			opts: listIssuesOptions{
+				project:  "MYPROJ",
+				assignee: "me",
+			},
+			expected: "project = MYPROJ AND assignee = currentUser() ORDER BY status DESC",
+		},
+		{
 			name: "project with unassigned",
 			opts: listIssuesOptions{
 				project:  "MYPROJ",
@@ -484,6 +492,14 @@ func TestBuildJQL(t *testing.T) {
 			opts: listIssuesOptions{
 				project:  "MYPROJ",
 				reporter: "currentUser()",
+			},
+			expected: "project = MYPROJ AND reporter = currentUser() ORDER BY status DESC",
+		},
+		{
+			name: "project with me reporter (alias for currentUser)",
+			opts: listIssuesOptions{
+				project:  "MYPROJ",
+				reporter: "me",
 			},
 			expected: "project = MYPROJ AND reporter = currentUser() ORDER BY status DESC",
 		},

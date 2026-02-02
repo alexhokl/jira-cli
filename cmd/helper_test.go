@@ -385,3 +385,66 @@ func TestLegacyTabWriter(t *testing.T) {
 		t.Errorf("Flush failed: %v", err)
 	}
 }
+
+func TestNormalizeUserValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "me converts to currentUser()",
+			input:    "me",
+			expected: "currentUser()",
+		},
+		{
+			name:     "currentUser() unchanged",
+			input:    "currentUser()",
+			expected: "currentUser()",
+		},
+		{
+			name:     "unassigned unchanged",
+			input:    "unassigned",
+			expected: "unassigned",
+		},
+		{
+			name:     "none unchanged",
+			input:    "none",
+			expected: "none",
+		},
+		{
+			name:     "account ID unchanged",
+			input:    "5b10ac8d82e05b22cc7d4ef5",
+			expected: "5b10ac8d82e05b22cc7d4ef5",
+		},
+		{
+			name:     "username unchanged",
+			input:    "john.doe",
+			expected: "john.doe",
+		},
+		{
+			name:     "empty string unchanged",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "Me with capital M unchanged (case sensitive)",
+			input:    "Me",
+			expected: "Me",
+		},
+		{
+			name:     "ME all caps unchanged (case sensitive)",
+			input:    "ME",
+			expected: "ME",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalizeUserValue(tt.input)
+			if result != tt.expected {
+				t.Errorf("normalizeUserValue(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

@@ -68,8 +68,8 @@ func init() {
 	flags.StringVarP(&listIssuesOpts.jql, "jql", "q", "", "Raw JQL query (overrides other filter flags)")
 	flags.StringVarP(&listIssuesOpts.project, "project", "p", "", "Filter by project key")
 	flags.StringVarP(&listIssuesOpts.status, "status", "s", "", "Filter by status (e.g., 'In Progress', 'Done')")
-	flags.StringVarP(&listIssuesOpts.assignee, "assignee", "a", "", "Filter by assignee (use 'currentUser()' for yourself, 'unassigned' for unassigned)")
-	flags.StringVarP(&listIssuesOpts.reporter, "reporter", "r", "", "Filter by reporter")
+	flags.StringVarP(&listIssuesOpts.assignee, "assignee", "a", "", "Filter by assignee (use 'me' or 'currentUser()' for yourself, 'unassigned' for unassigned)")
+	flags.StringVarP(&listIssuesOpts.reporter, "reporter", "r", "", "Filter by reporter (use 'me' or 'currentUser()' for yourself)")
 	flags.StringSliceVarP(&listIssuesOpts.labels, "label", "l", nil, "Filter by label (can be specified multiple times)")
 	flags.StringVarP(&listIssuesOpts.issueType, "type", "t", "", "Filter by issue type (e.g., Bug, Story, Task)")
 	flags.StringVar(&listIssuesOpts.priority, "priority", "", "Filter by priority (e.g., High, Medium, Low)")
@@ -158,21 +158,23 @@ func buildJQL() string {
 	}
 
 	if listIssuesOpts.assignee != "" {
-		if listIssuesOpts.assignee == "unassigned" {
+		assignee := normalizeUserValue(listIssuesOpts.assignee)
+		if assignee == "unassigned" {
 			conditions = append(conditions, "assignee IS EMPTY")
-		} else if strings.HasSuffix(listIssuesOpts.assignee, "()") {
+		} else if strings.HasSuffix(assignee, "()") {
 			// Function like currentUser()
-			conditions = append(conditions, fmt.Sprintf("assignee = %s", listIssuesOpts.assignee))
+			conditions = append(conditions, fmt.Sprintf("assignee = %s", assignee))
 		} else {
-			conditions = append(conditions, fmt.Sprintf("assignee = %s", quoteJQLValue(listIssuesOpts.assignee)))
+			conditions = append(conditions, fmt.Sprintf("assignee = %s", quoteJQLValue(assignee)))
 		}
 	}
 
 	if listIssuesOpts.reporter != "" {
-		if strings.HasSuffix(listIssuesOpts.reporter, "()") {
-			conditions = append(conditions, fmt.Sprintf("reporter = %s", listIssuesOpts.reporter))
+		reporter := normalizeUserValue(listIssuesOpts.reporter)
+		if strings.HasSuffix(reporter, "()") {
+			conditions = append(conditions, fmt.Sprintf("reporter = %s", reporter))
 		} else {
-			conditions = append(conditions, fmt.Sprintf("reporter = %s", quoteJQLValue(listIssuesOpts.reporter)))
+			conditions = append(conditions, fmt.Sprintf("reporter = %s", quoteJQLValue(reporter)))
 		}
 	}
 
