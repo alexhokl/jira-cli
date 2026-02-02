@@ -36,7 +36,7 @@ func runListLinkTypes(_ *cobra.Command, _ []string) error {
 
 	result, _, err := client.IssueLinkTypesAPI.GetIssueLinkTypes(ctx).Execute()
 	if err != nil {
-		return err
+		return wrapAPIError(err)
 	}
 
 	linkTypes := result.GetIssueLinkTypes()

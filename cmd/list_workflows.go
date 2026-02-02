@@ -77,7 +77,7 @@ func runListWorkflows(cmd *cobra.Command, _ []string) error {
 
 		result, _, err := request.Execute()
 		if err != nil {
-			return fmt.Errorf("failed to get workflows: %w", err)
+			return wrapAPIError(fmt.Errorf("failed to get workflows: %w", err))
 		}
 
 		for _, wf := range result.GetValues() {

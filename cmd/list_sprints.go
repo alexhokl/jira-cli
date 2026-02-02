@@ -64,7 +64,7 @@ func runListSprints(_ *cobra.Command, _ []string) error {
 
 		resp, err := request.Execute()
 		if err != nil {
-			return err
+			return wrapAPIError(err)
 		}
 
 		body, err := io.ReadAll(resp.Body)

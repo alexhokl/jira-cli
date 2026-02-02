@@ -97,7 +97,7 @@ func runListUsers(_ *cobra.Command, _ []string) error {
 			MaxResults(pageSize).
 			Execute()
 		if err != nil {
-			return err
+			return wrapAPIError(err)
 		}
 
 		// Filter users

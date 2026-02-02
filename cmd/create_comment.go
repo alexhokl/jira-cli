@@ -49,7 +49,7 @@ func runCreateComment(_ *cobra.Command, _ []string) error {
 	client := newClient()
 	_, _, err := client.IssueCommentsAPI.AddComment(getAuthContext(), createCommentOpts.id).Comment(*body).Execute()
 	if err != nil {
-		return err
+		return wrapAPIError(err)
 	}
 	fmt.Println("Comment created")
 	return nil

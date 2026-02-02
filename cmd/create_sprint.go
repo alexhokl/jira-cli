@@ -62,7 +62,7 @@ func runCreateSprint(_ *cobra.Command, _ []string) error {
 
 	_, err := client.SprintAPI.CreateSprint(ctx).CreateSprintRequest(*request).Execute()
 	if err != nil {
-		return err
+		return wrapAPIError(err)
 	}
 
 	fmt.Println("Sprint created")

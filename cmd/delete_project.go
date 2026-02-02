@@ -52,7 +52,7 @@ func runDeleteProject(_ *cobra.Command, _ []string) error {
 		EnableUndo(enableUndo).
 		Execute()
 	if err != nil {
-		return err
+		return wrapAPIError(err)
 	}
 
 	if enableUndo {

@@ -38,7 +38,7 @@ func runCloseSprint(_ *cobra.Command, _ []string) error {
 
 	_, err := client.SprintAPI.PartiallyUpdateSprint(ctx, closeSprintOpts.id).UpdateSprintRequest(*request).Execute()
 	if err != nil {
-		return err
+		return wrapAPIError(err)
 	}
 
 	fmt.Println("Sprint closed")

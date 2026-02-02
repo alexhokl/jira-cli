@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -74,12 +75,6 @@ func runCreateIssue(_ *cobra.Command, _ []string) error {
 	client := newClient()
 	ctx := getAuthContext()
 
-	// Get current user to set as reporter
-	currentUser, _, err := client.MyselfAPI.GetCurrentUser(ctx).Execute()
-	if err != nil {
-		return fmt.Errorf("failed to get current user: %w", err)
-	}
-
 	description := ""
 	if createIssueOpts.descriptionFile != "" {
 		content, err := os.ReadFile(createIssueOpts.descriptionFile)
@@ -110,18 +105,13 @@ func runCreateIssue(_ *cobra.Command, _ []string) error {
 	}
 
 	if createIssueOpts.assignee != "" {
-		assigneeId := createIssueOpts.assignee
-		if assigneeId == "me" {
-			assigneeId = currentUser.GetAccountId()
+		assigneeId, err := resolveUserAlias(createIssueOpts.assignee)
+		if err != nil {
+			return fmt.Errorf("failed to resolve assignee: %w", err)
 		}
 		fields["assignee"] = map[string]any{
 			"id": assigneeId,
 		}
-	}
-
-	// Set the current user as reporter
-	fields["reporter"] = map[string]any{
-		"id": currentUser.GetAccountId(),
 	}
 
 	if createIssueOpts.labels != "" {
@@ -175,8 +165,12 @@ func runCreateIssue(_ *cobra.Command, _ []string) error {
 				return fmt.Errorf("custom field %q not found", fieldName)
 			}
 
+			// Enrich field info with allowed values for option-type fields
+			enrichFieldInfoWithAllowedValues(client, ctx, &fieldInfo, createIssueOpts.project, createIssueOpts.issueType)
+
 			// Convert the value to the appropriate format for the field type
-			convertedValue, err := convertCustomFieldValue(fieldValue, fieldInfo)
+			// Pass project key for sprint name resolution
+			convertedValue, err := convertCustomFieldValue(fieldValue, fieldInfo, createIssueOpts.project)
 			if err != nil {
 				return fmt.Errorf("failed to convert value for custom field %q: %w", fieldName, err)
 			}
@@ -190,6 +184,13 @@ func runCreateIssue(_ *cobra.Command, _ []string) error {
 
 	createdIssue, _, err := client.IssuesAPI.CreateIssue(ctx).IssueUpdateDetails(*issueUpdateDetails).Execute()
 	if err != nil {
+		var openAPIErr *swagger.GenericOpenAPIError
+		if errors.As(err, &openAPIErr) {
+			body := string(openAPIErr.Body())
+			if body != "" {
+				return fmt.Errorf("%s\n\n%s", err, body)
+			}
+		}
 		return err
 	}
 

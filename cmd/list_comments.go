@@ -34,7 +34,7 @@ func runListComments(_ *cobra.Command, _ []string) error {
 	client := newClient()
 	result, _, err := client.IssueCommentsAPI.GetComments(getAuthContext(), listCommentsOpts.id).Execute()
 	if err != nil {
-		return err
+		return wrapAPIError(err)
 	}
 
 	comments := result.GetComments()

@@ -68,7 +68,7 @@ func runUpdateSprint(_ *cobra.Command, _ []string) error {
 
 	_, err := client.SprintAPI.PartiallyUpdateSprint(ctx, updateSprintOpts.id).UpdateSprintRequest(*request).Execute()
 	if err != nil {
-		return err
+		return wrapAPIError(err)
 	}
 
 	fmt.Println("Sprint updated")

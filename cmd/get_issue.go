@@ -47,7 +47,7 @@ func runGetIssue(_ *cobra.Command, _ []string) error {
 	client := newClient()
 	issue, _, err := client.IssuesAPI.GetIssue(getAuthContext(), getIssueOpts.id).Execute()
 	if err != nil {
-		return err
+		return wrapAPIError(err)
 	}
 
 	color.NoColor = noColor

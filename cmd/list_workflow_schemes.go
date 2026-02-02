@@ -45,7 +45,7 @@ func runListWorkflowSchemes(_ *cobra.Command, _ []string) error {
 			MaxResults(50).
 			Execute()
 		if err != nil {
-			return fmt.Errorf("failed to get workflow schemes: %w", err)
+			return wrapAPIError(fmt.Errorf("failed to get workflow schemes: %w", err))
 		}
 
 		for _, scheme := range result.GetValues() {
@@ -77,7 +77,7 @@ func runListWorkflowSchemes(_ *cobra.Command, _ []string) error {
 	// Get all projects first
 	projects, _, err := client.ProjectsAPI.GetAllProjects(ctx).Execute()
 	if err != nil {
-		return fmt.Errorf("failed to get projects: %w", err)
+		return wrapAPIError(fmt.Errorf("failed to get projects: %w", err))
 	}
 
 	// Build project ID to key map

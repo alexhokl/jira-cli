@@ -64,7 +64,7 @@ func runListBoards(_ *cobra.Command, _ []string) error {
 
 		result, _, err := request.Execute()
 		if err != nil {
-			return err
+			return wrapAPIError(err)
 		}
 
 		allBoards = append(allBoards, result.GetValues()...)

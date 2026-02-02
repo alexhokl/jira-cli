@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -226,6 +227,22 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("failed to get custom field information: %w", err)
 		}
 
+		// Extract project key from issue key (e.g., PROJ-123 -> PROJ)
+		projectKey := extractProjectKeyFromIssueKey(updateIssueOpts.issueKey)
+
+		// Get the issue to determine its type (needed for allowed values lookup)
+		issue, _, err := client.IssuesAPI.GetIssue(ctx, updateIssueOpts.issueKey).Execute()
+		var issueTypeName string
+		if err == nil {
+			if issueFields := issue.GetFields(); issueFields != nil {
+				if issueType, ok := issueFields["issuetype"].(map[string]interface{}); ok {
+					if name, ok := issueType["name"].(string); ok {
+						issueTypeName = name
+					}
+				}
+			}
+		}
+
 		for _, cf := range updateIssueOpts.customFields {
 			// Parse the name=value format
 			eqIdx := strings.Index(cf, "=")
@@ -241,8 +258,13 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 				return fmt.Errorf("custom field %q not found", fieldName)
 			}
 
+			// Enrich field info with allowed values for option-type fields
+			if issueTypeName != "" {
+				enrichFieldInfoWithAllowedValues(client, ctx, &fieldInfo, projectKey, issueTypeName)
+			}
+
 			// Convert the value to the appropriate format for the field type
-			convertedValue, err := convertCustomFieldValue(fieldValue, fieldInfo)
+			convertedValue, err := convertCustomFieldValue(fieldValue, fieldInfo, projectKey)
 			if err != nil {
 				return fmt.Errorf("failed to convert value for custom field %q: %w", fieldName, err)
 			}
@@ -271,6 +293,13 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 
 		_, _, err := request.Execute()
 		if err != nil {
+			var openAPIErr *swagger.GenericOpenAPIError
+			if errors.As(err, &openAPIErr) {
+				body := string(openAPIErr.Body())
+				if body != "" {
+					return fmt.Errorf("%s\n\n%s", err, body)
+				}
+			}
 			return err
 		}
 
@@ -294,6 +323,13 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 			LinkIssueRequestJsonBean(*linkRequest).
 			Execute()
 		if err != nil {
+			var openAPIErr *swagger.GenericOpenAPIError
+			if errors.As(err, &openAPIErr) {
+				body := string(openAPIErr.Body())
+				if body != "" {
+					return fmt.Errorf("%s\n\n%s", err, body)
+				}
+			}
 			return err
 		}
 
@@ -305,11 +341,12 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 
 // customFieldInfo holds information about a custom field for update operations
 type customFieldInfo struct {
-	id         string
-	name       string
-	schemaType string // The schema type (e.g., "string", "number", "option", "array")
-	itemType   string // For array types, the type of items
-	custom     string // The custom field type URI (e.g., "com.atlassian.jira.plugin.system.customfieldtypes:select")
+	id            string
+	name          string
+	schemaType    string        // The schema type (e.g., "string", "number", "option", "array")
+	itemType      string        // For array types, the type of items
+	custom        string        // The custom field type URI (e.g., "com.atlassian.jira.plugin.system.customfieldtypes:select")
+	allowedValues []interface{} // The list of allowed values for option fields
 }
 
 // getCustomFieldInfoMap returns a map of field ID to customFieldInfo for all custom fields
@@ -342,6 +379,87 @@ func getCustomFieldInfoMap(client *swagger.APIClient, ctx context.Context) (map[
 	return result, nil
 }
 
+// getFieldAllowedValues fetches the allowed values for a custom field from create metadata
+func getFieldAllowedValues(client *swagger.APIClient, ctx context.Context, projectKey, issueTypeName, fieldId string) ([]interface{}, error) {
+	// First, get the issue type ID
+	issueTypes, _, err := client.IssueTypesAPI.GetIssueAllTypes(ctx).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get issue types: %w", err)
+	}
+
+	var issueTypeId string
+	for _, it := range issueTypes {
+		if strings.EqualFold(it.GetName(), issueTypeName) {
+			issueTypeId = it.GetId()
+			break
+		}
+	}
+
+	if issueTypeId == "" {
+		// Issue type not found, return empty allowed values
+		return nil, nil
+	}
+
+	// Fetch create metadata for this project and issue type
+	var startAt int32 = 0
+	const maxResults int32 = 50
+
+	for {
+		result, _, err := client.IssuesAPI.GetCreateIssueMetaIssueTypeId(ctx, projectKey, issueTypeId).
+			StartAt(startAt).
+			MaxResults(maxResults).
+			Execute()
+		if err != nil {
+			// If we can't get metadata, return empty allowed values (non-fatal)
+			return nil, nil
+		}
+
+		// Check both Fields and Results (API may return either)
+		fields := result.GetFields()
+		if len(fields) == 0 {
+			fields = result.GetResults()
+		}
+
+		for _, field := range fields {
+			if field.FieldId == fieldId {
+				return field.GetAllowedValues(), nil
+			}
+		}
+
+		// Check if we've fetched all results
+		total := result.GetTotal()
+		fetched := startAt + int32(len(fields))
+		if int64(fetched) >= total || len(fields) == 0 {
+			break
+		}
+
+		startAt += int32(len(fields))
+	}
+
+	return nil, nil
+}
+
+// enrichFieldInfoWithAllowedValues adds allowed values to a field info if it's an option-type field
+func enrichFieldInfoWithAllowedValues(client *swagger.APIClient, ctx context.Context, info *customFieldInfo, projectKey, issueTypeName string) {
+	fieldType := extractFieldType(info.custom)
+
+	// Only fetch allowed values for option-type fields
+	isOptionField := info.schemaType == "option" ||
+		(info.schemaType == "array" && info.itemType == "option") ||
+		fieldType == "select" || fieldType == "radiobuttons" ||
+		fieldType == "multiselect" || fieldType == "multicheckboxes" ||
+		fieldType == "cascadingselect"
+
+	if !isOptionField {
+		return
+	}
+
+	allowedValues, err := getFieldAllowedValues(client, ctx, projectKey, issueTypeName, info.id)
+	if err == nil && len(allowedValues) > 0 {
+		info.allowedValues = allowedValues
+	}
+}
+
 // findCustomFieldByName searches for a custom field by name (case-insensitive)
 func findCustomFieldByName(fieldMap map[string]customFieldInfo, name string) (customFieldInfo, bool) {
 	for _, info := range fieldMap {
@@ -353,7 +471,8 @@ func findCustomFieldByName(fieldMap map[string]customFieldInfo, name string) (cu
 }
 
 // convertCustomFieldValue converts a string value to the appropriate format for the custom field type
-func convertCustomFieldValue(value string, field customFieldInfo) (interface{}, error) {
+// projectKey is optional and used for resolving sprint names to IDs
+func convertCustomFieldValue(value string, field customFieldInfo, projectKey string) (interface{}, error) {
 	// Empty value means clear the field
 	if value == "" {
 		return nil, nil
@@ -361,6 +480,35 @@ func convertCustomFieldValue(value string, field customFieldInfo) (interface{}, 
 
 	// Determine the field type from the custom field type URI
 	fieldType := extractFieldType(field.custom)
+
+	// Handle special field types first, regardless of schema type
+	switch fieldType {
+	case "gh-sprint":
+		// Sprint field - requires sprint ID(s)
+		// Parse as comma-separated values (could be IDs or names)
+		sprintValues := parseCommaSeparatedValues(value)
+		ids := make([]int, 0, len(sprintValues))
+		for _, val := range sprintValues {
+			// Try to parse as integer first
+			id, err := strconv.Atoi(val)
+			if err == nil {
+				ids = append(ids, id)
+				continue
+			}
+
+			// Not a number, try to look up sprint by name
+			if projectKey == "" {
+				return nil, fmt.Errorf("sprint %q is not a valid ID; to use sprint names, provide a project key, or use sprint IDs (run 'jira-cli list sprints --board-id <id>' to find IDs)", val)
+			}
+
+			sprintId, err := lookupSprintByName(projectKey, val)
+			if err != nil {
+				return nil, err
+			}
+			ids = append(ids, sprintId)
+		}
+		return ids, nil
+	}
 
 	switch field.schemaType {
 	case "string":
@@ -375,10 +523,8 @@ func convertCustomFieldValue(value string, field customFieldInfo) (interface{}, 
 		return f, nil
 
 	case "option":
-		// Single select - use value property
-		return map[string]interface{}{
-			"value": value,
-		}, nil
+		// Single select - look up option ID from allowed values, fall back to value
+		return formatOptionValue(value, field.allowedValues), nil
 
 	case "array":
 		// Handle array types based on item type
@@ -388,9 +534,7 @@ func convertCustomFieldValue(value string, field customFieldInfo) (interface{}, 
 			values := parseCommaSeparatedValues(value)
 			options := make([]map[string]interface{}, len(values))
 			for i, v := range values {
-				options[i] = map[string]interface{}{
-					"value": v,
-				}
+				options[i] = formatOptionValue(v, field.allowedValues)
 			}
 			return options, nil
 
@@ -399,12 +543,16 @@ func convertCustomFieldValue(value string, field customFieldInfo) (interface{}, 
 			return parseCommaSeparatedValues(value), nil
 
 		case "user":
-			// Multi-user picker - parse comma-separated account IDs
+			// Multi-user picker - parse comma-separated account IDs (supports "me" alias)
 			accountIds := parseCommaSeparatedValues(value)
 			users := make([]map[string]interface{}, len(accountIds))
 			for i, id := range accountIds {
+				resolvedId, err := resolveUserAlias(id)
+				if err != nil {
+					return nil, err
+				}
 				users[i] = map[string]interface{}{
-					"id": id,
+					"id": resolvedId,
 				}
 			}
 			return users, nil
@@ -415,9 +563,13 @@ func convertCustomFieldValue(value string, field customFieldInfo) (interface{}, 
 		}
 
 	case "user":
-		// Single user picker
+		// Single user picker (supports "me" alias)
+		resolvedId, err := resolveUserAlias(value)
+		if err != nil {
+			return nil, err
+		}
 		return map[string]interface{}{
-			"id": value,
+			"id": resolvedId,
 		}, nil
 
 	case "date":
@@ -432,31 +584,37 @@ func convertCustomFieldValue(value string, field customFieldInfo) (interface{}, 
 		// Handle based on custom field type if schema type is not conclusive
 		switch fieldType {
 		case "select", "radiobuttons":
-			return map[string]interface{}{
-				"value": value,
-			}, nil
+			return formatOptionValue(value, field.allowedValues), nil
 
 		case "multiselect", "multicheckboxes":
 			values := parseCommaSeparatedValues(value)
 			options := make([]map[string]interface{}, len(values))
 			for i, v := range values {
-				options[i] = map[string]interface{}{
-					"value": v,
-				}
+				options[i] = formatOptionValue(v, field.allowedValues)
 			}
 			return options, nil
 
 		case "userpicker":
+			// Single user picker (supports "me" alias)
+			resolvedId, err := resolveUserAlias(value)
+			if err != nil {
+				return nil, err
+			}
 			return map[string]interface{}{
-				"id": value,
+				"id": resolvedId,
 			}, nil
 
 		case "multiuserpicker":
+			// Multi-user picker (supports "me" alias)
 			accountIds := parseCommaSeparatedValues(value)
 			users := make([]map[string]interface{}, len(accountIds))
 			for i, id := range accountIds {
+				resolvedId, err := resolveUserAlias(id)
+				if err != nil {
+					return nil, err
+				}
 				users[i] = map[string]interface{}{
-					"id": id,
+					"id": resolvedId,
 				}
 			}
 			return users, nil
@@ -521,4 +679,64 @@ func parseCommaSeparatedValues(value string) []string {
 		}
 	}
 	return result
+}
+
+// extractProjectKeyFromIssueKey extracts the project key from an issue key
+// e.g., "PROJ-123" -> "PROJ"
+func extractProjectKeyFromIssueKey(issueKey string) string {
+	if idx := strings.LastIndex(issueKey, "-"); idx != -1 {
+		return issueKey[:idx]
+	}
+	return issueKey
+}
+
+// lookupOptionId looks up an option's ID from allowed values by matching the value name
+// Returns the ID if found, or empty string if not found
+func lookupOptionId(allowedValues []interface{}, valueName string) string {
+	for _, av := range allowedValues {
+		if avMap, ok := av.(map[string]interface{}); ok {
+			// Check if the "value" field matches (case-insensitive)
+			if v, ok := avMap["value"].(string); ok {
+				if strings.EqualFold(v, valueName) {
+					// Return the ID if present
+					if id, ok := avMap["id"].(string); ok {
+						return id
+					}
+					// Some fields use numeric IDs
+					if id, ok := avMap["id"].(float64); ok {
+						return strconv.FormatFloat(id, 'f', 0, 64)
+					}
+				}
+			}
+			// Also check "name" field for some field types
+			if v, ok := avMap["name"].(string); ok {
+				if strings.EqualFold(v, valueName) {
+					if id, ok := avMap["id"].(string); ok {
+						return id
+					}
+					if id, ok := avMap["id"].(float64); ok {
+						return strconv.FormatFloat(id, 'f', 0, 64)
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// formatOptionValue formats an option value for the API
+// If allowed values are provided and contain the value, use the ID
+// Otherwise, fall back to using the value name directly
+func formatOptionValue(valueName string, allowedValues []interface{}) map[string]interface{} {
+	if len(allowedValues) > 0 {
+		if id := lookupOptionId(allowedValues, valueName); id != "" {
+			return map[string]interface{}{
+				"id": id,
+			}
+		}
+	}
+	// Fall back to value-based lookup
+	return map[string]interface{}{
+		"value": valueName,
+	}
 }

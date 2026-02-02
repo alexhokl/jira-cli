@@ -61,7 +61,7 @@ func runListStatus(_ *cobra.Command, _ []string) error {
 	if listStatusOpts.project != "" {
 		project, _, err := client.ProjectsAPI.GetProject(ctx, listStatusOpts.project).Execute()
 		if err != nil {
-			return fmt.Errorf("failed to get project: %w", err)
+			return wrapAPIError(fmt.Errorf("failed to get project: %w", err))
 		}
 		projectId = project.GetId()
 	}
@@ -94,7 +94,7 @@ func runListStatus(_ *cobra.Command, _ []string) error {
 
 		result, _, err := request.Execute()
 		if err != nil {
-			return fmt.Errorf("failed to get statuses: %w", err)
+			return wrapAPIError(fmt.Errorf("failed to get statuses: %w", err))
 		}
 
 		for _, s := range result.GetValues() {

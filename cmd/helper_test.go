@@ -448,3 +448,124 @@ func TestNormalizeUserValue(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractProjectKeyFromIssueKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "standard issue key",
+			input:    "PROJ-123",
+			expected: "PROJ",
+		},
+		{
+			name:     "lowercase project key",
+			input:    "proj-456",
+			expected: "proj",
+		},
+		{
+			name:     "long project key",
+			input:    "MYPROJECT-1",
+			expected: "MYPROJECT",
+		},
+		{
+			name:     "single letter project key",
+			input:    "X-99",
+			expected: "X",
+		},
+		{
+			name:     "high issue number",
+			input:    "TEST-99999",
+			expected: "TEST",
+		},
+		{
+			name:     "project key with numbers",
+			input:    "PROJ2-123",
+			expected: "PROJ2",
+		},
+		{
+			name:     "no hyphen returns original",
+			input:    "PROJ123",
+			expected: "PROJ123",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "just hyphen returns empty",
+			input:    "-123",
+			expected: "",
+		},
+		{
+			name:     "multiple hyphens uses last",
+			input:    "MY-PROJ-123",
+			expected: "MY-PROJ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractProjectKeyFromIssueKey(tt.input)
+			if result != tt.expected {
+				t.Errorf("extractProjectKeyFromIssueKey(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResolveUserAlias_NonMeValues(t *testing.T) {
+	// Test that non-"me" values are returned unchanged without API calls
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "account ID unchanged",
+			input:    "5b10ac8d82e05b22cc7d4ef5",
+			expected: "5b10ac8d82e05b22cc7d4ef5",
+		},
+		{
+			name:     "username unchanged",
+			input:    "john.doe",
+			expected: "john.doe",
+		},
+		{
+			name:     "empty string unchanged",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "Me with capital M unchanged (case sensitive)",
+			input:    "Me",
+			expected: "Me",
+		},
+		{
+			name:     "ME all caps unchanged (case sensitive)",
+			input:    "ME",
+			expected: "ME",
+		},
+		{
+			name:     "none unchanged",
+			input:    "none",
+			expected: "none",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := resolveUserAlias(tt.input)
+			if err != nil {
+				t.Errorf("resolveUserAlias(%q) unexpected error: %v", tt.input, err)
+				return
+			}
+			if result != tt.expected {
+				t.Errorf("resolveUserAlias(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

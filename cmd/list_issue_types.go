@@ -47,7 +47,7 @@ func runListIssueTypes(_ *cobra.Command, _ []string) error {
 		// Get project ID first
 		project, _, err := client.ProjectsAPI.GetProject(ctx, listIssueTypesOpts.project).Execute()
 		if err != nil {
-			return fmt.Errorf("failed to get project: %w", err)
+			return wrapAPIError(fmt.Errorf("failed to get project: %w", err))
 		}
 
 		projectId, err := parseProjectId(project.GetId())
@@ -60,7 +60,7 @@ func runListIssueTypes(_ *cobra.Command, _ []string) error {
 			ProjectId(projectId).
 			Execute()
 		if err != nil {
-			return fmt.Errorf("failed to get issue types for project: %w", err)
+			return wrapAPIError(fmt.Errorf("failed to get issue types for project: %w", err))
 		}
 
 		for _, t := range types {
@@ -76,7 +76,7 @@ func runListIssueTypes(_ *cobra.Command, _ []string) error {
 		// Get all issue types
 		types, _, err := client.IssueTypesAPI.GetIssueAllTypes(ctx).Execute()
 		if err != nil {
-			return fmt.Errorf("failed to get issue types: %w", err)
+			return wrapAPIError(fmt.Errorf("failed to get issue types: %w", err))
 		}
 
 		for _, t := range types {

@@ -56,7 +56,7 @@ func TestFindCustomFieldByName(t *testing.T) {
 			if found != tt.found {
 				t.Errorf("findCustomFieldByName() found = %v, want %v", found, tt.found)
 			}
-			if found && result != tt.expected {
+			if found && !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("findCustomFieldByName() result = %v, want %v", result, tt.expected)
 			}
 		})
@@ -391,11 +391,31 @@ func TestConvertCustomFieldValue(t *testing.T) {
 			field:    customFieldInfo{schemaType: "array", itemType: "unknown"},
 			expected: []string{"a", "b", "c"},
 		},
+		{
+			name:     "sprint field with single ID",
+			value:    "123",
+			field:    customFieldInfo{schemaType: "array", itemType: "json", custom: "com.pyxis.greenhopper.jira:gh-sprint"},
+			expected: []int{123},
+		},
+		{
+			name:     "sprint field with multiple IDs",
+			value:    "123, 456",
+			field:    customFieldInfo{schemaType: "array", itemType: "json", custom: "com.pyxis.greenhopper.jira:gh-sprint"},
+			expected: []int{123, 456},
+		},
+		{
+			name:        "sprint field with invalid ID (name instead of ID)",
+			value:       "Sprint 97",
+			field:       customFieldInfo{schemaType: "array", itemType: "json", custom: "com.pyxis.greenhopper.jira:gh-sprint"},
+			expected:    nil,
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := convertCustomFieldValue(tt.value, tt.field)
+			// Pass empty project key - sprint name lookup tests would need mock server
+			result, err := convertCustomFieldValue(tt.value, tt.field, "")
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("convertCustomFieldValue() expected error but got nil")
@@ -408,6 +428,104 @@ func TestConvertCustomFieldValue(t *testing.T) {
 			}
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("convertCustomFieldValue(%q, %+v) = %v, want %v", tt.value, tt.field, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestLookupOptionId(t *testing.T) {
+	allowedValues := []interface{}{
+		map[string]interface{}{"id": "10001", "value": "Option A"},
+		map[string]interface{}{"id": "10002", "value": "Option B"},
+		map[string]interface{}{"id": float64(10003), "value": "Option C"},
+		map[string]interface{}{"id": "10004", "name": "Named Option"},
+	}
+
+	tests := []struct {
+		name       string
+		valueName  string
+		expectedId string
+	}{
+		{
+			name:       "exact match by value",
+			valueName:  "Option A",
+			expectedId: "10001",
+		},
+		{
+			name:       "case insensitive match",
+			valueName:  "option b",
+			expectedId: "10002",
+		},
+		{
+			name:       "numeric id",
+			valueName:  "Option C",
+			expectedId: "10003",
+		},
+		{
+			name:       "match by name field",
+			valueName:  "Named Option",
+			expectedId: "10004",
+		},
+		{
+			name:       "not found",
+			valueName:  "Nonexistent",
+			expectedId: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := lookupOptionId(allowedValues, tt.valueName)
+			if result != tt.expectedId {
+				t.Errorf("lookupOptionId() = %q, want %q", result, tt.expectedId)
+			}
+		})
+	}
+}
+
+func TestFormatOptionValue(t *testing.T) {
+	allowedValues := []interface{}{
+		map[string]interface{}{"id": "10001", "value": "Option A"},
+		map[string]interface{}{"id": "10002", "value": "Option B"},
+	}
+
+	tests := []struct {
+		name          string
+		valueName     string
+		allowedValues []interface{}
+		expected      map[string]interface{}
+	}{
+		{
+			name:          "with allowed values - found",
+			valueName:     "Option A",
+			allowedValues: allowedValues,
+			expected:      map[string]interface{}{"id": "10001"},
+		},
+		{
+			name:          "with allowed values - not found (fallback to value)",
+			valueName:     "Unknown",
+			allowedValues: allowedValues,
+			expected:      map[string]interface{}{"value": "Unknown"},
+		},
+		{
+			name:          "without allowed values (fallback to value)",
+			valueName:     "Option A",
+			allowedValues: nil,
+			expected:      map[string]interface{}{"value": "Option A"},
+		},
+		{
+			name:          "empty allowed values (fallback to value)",
+			valueName:     "Option A",
+			allowedValues: []interface{}{},
+			expected:      map[string]interface{}{"value": "Option A"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatOptionValue(tt.valueName, tt.allowedValues)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("formatOptionValue() = %v, want %v", result, tt.expected)
 			}
 		})
 	}

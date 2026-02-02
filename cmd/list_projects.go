@@ -49,7 +49,7 @@ func runListProjects(_ *cobra.Command, _ []string) error {
 
 		result, _, err := request.Execute()
 		if err != nil {
-			return err
+			return wrapAPIError(err)
 		}
 
 		allProjects = append(allProjects, result.GetValues()...)
