@@ -52,7 +52,7 @@ func TestQuoteJQLValue(t *testing.T) {
 			input:    "some-long-label-name",
 			expected: `"some-long-label-name"`,
 		},
-		// Additional edge cases - testing actual behavior
+		// Additional edge cases - testing JQL reserved characters
 		{
 			name:     "value with tab character (not quoted)",
 			input:    "value\twith\ttab",
@@ -64,9 +64,9 @@ func TestQuoteJQLValue(t *testing.T) {
 			expected: "value\nwith\nnewline",
 		},
 		{
-			name:     "value with backslash (not quoted)",
+			name:     "value with backslash (quoted)",
 			input:    `path\to\file`,
-			expected: `path\to\file`,
+			expected: `"path\to\file"`,
 		},
 		{
 			name:     "numeric value",
@@ -74,29 +74,99 @@ func TestQuoteJQLValue(t *testing.T) {
 			expected: "12345",
 		},
 		{
-			name:     "value with parentheses (not quoted)",
+			name:     "value with parentheses (quoted)",
 			input:    "currentUser()",
-			expected: "currentUser()",
+			expected: `"currentUser()"`,
 		},
 		{
-			name:     "value with brackets (not quoted)",
+			name:     "value with brackets (quoted)",
 			input:    "[value]",
-			expected: "[value]",
+			expected: `"[value]"`,
 		},
 		{
-			name:     "value with special JQL chars (not quoted)",
+			name:     "value with special JQL chars (quoted)",
 			input:    "value=test",
-			expected: "value=test",
+			expected: `"value=test"`,
 		},
 		{
-			name:     "value with colon (not quoted)",
+			name:     "value with colon (quoted)",
 			input:    "key:value",
-			expected: "key:value",
+			expected: `"key:value"`,
 		},
 		{
 			name:     "value with underscore only",
 			input:    "my_label",
 			expected: "my_label",
+		},
+		{
+			name:     "value with forward slash (quoted)",
+			input:    "team/project",
+			expected: `"team/project"`,
+		},
+		{
+			name:     "value with multiple forward slashes",
+			input:    "path/to/something",
+			expected: `"path/to/something"`,
+		},
+		{
+			name:     "value with asterisk (quoted)",
+			input:    "test*",
+			expected: `"test*"`,
+		},
+		{
+			name:     "value with question mark (quoted)",
+			input:    "test?",
+			expected: `"test?"`,
+		},
+		{
+			name:     "value with plus sign (quoted)",
+			input:    "test+value",
+			expected: `"test+value"`,
+		},
+		{
+			name:     "value with ampersand (quoted)",
+			input:    "test&value",
+			expected: `"test&value"`,
+		},
+		{
+			name:     "value with pipe (quoted)",
+			input:    "test|value",
+			expected: `"test|value"`,
+		},
+		{
+			name:     "value with exclamation (quoted)",
+			input:    "important!",
+			expected: `"important!"`,
+		},
+		{
+			name:     "value with curly braces (quoted)",
+			input:    "{value}",
+			expected: `"{value}"`,
+		},
+		{
+			name:     "value with caret (quoted)",
+			input:    "test^value",
+			expected: `"test^value"`,
+		},
+		{
+			name:     "value with tilde (quoted)",
+			input:    "test~value",
+			expected: `"test~value"`,
+		},
+		{
+			name:     "value with less than (quoted)",
+			input:    "test<value",
+			expected: `"test<value"`,
+		},
+		{
+			name:     "value with greater than (quoted)",
+			input:    "test>value",
+			expected: `"test>value"`,
+		},
+		{
+			name:     "value with semicolon (quoted)",
+			input:    "test;value",
+			expected: `"test;value"`,
 		},
 		{
 			name:     "value with leading space",
@@ -635,6 +705,47 @@ func TestBuildJQL(t *testing.T) {
 				labels:  []string{},
 			},
 			expected: "project = MYPROJ ORDER BY status DESC",
+		},
+		// Test cases for labels with forward slashes (the bug fix)
+		{
+			name: "label with forward slash",
+			opts: listIssuesOptions{
+				project: "MYPROJ",
+				labels:  []string{"team/backend"},
+			},
+			expected: `project = MYPROJ AND labels = "team/backend" ORDER BY status DESC`,
+		},
+		{
+			name: "multiple labels with forward slashes",
+			opts: listIssuesOptions{
+				project: "MYPROJ",
+				labels:  []string{"team/backend", "priority/high"},
+			},
+			expected: `project = MYPROJ AND labels = "team/backend" AND labels = "priority/high" ORDER BY status DESC`,
+		},
+		{
+			name: "label with mixed special characters",
+			opts: listIssuesOptions{
+				project: "MYPROJ",
+				labels:  []string{"team/backend-v2"},
+			},
+			expected: `project = MYPROJ AND labels = "team/backend-v2" ORDER BY status DESC`,
+		},
+		{
+			name: "component with forward slash",
+			opts: listIssuesOptions{
+				project:   "MYPROJ",
+				component: "Frontend/React",
+			},
+			expected: `project = MYPROJ AND component = "Frontend/React" ORDER BY status DESC`,
+		},
+		{
+			name: "fix version with forward slash",
+			opts: listIssuesOptions{
+				project:    "MYPROJ",
+				fixVersion: "2024/Q1",
+			},
+			expected: `project = MYPROJ AND fixVersion = "2024/Q1" ORDER BY status DESC`,
 		},
 	}
 

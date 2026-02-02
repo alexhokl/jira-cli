@@ -235,8 +235,13 @@ func buildJQL() string {
 }
 
 func quoteJQLValue(value string) string {
-	// If value contains spaces or special characters, quote it
-	if strings.ContainsAny(value, " '\"") || strings.Contains(value, "-") {
+	// JQL reserved characters that require quoting:
+	// space, quotes, hyphen, forward slash, backslash, plus, ampersand, pipe,
+	// exclamation, parentheses, curly braces, square brackets, caret, tilde,
+	// asterisk, question mark, colon, semicolon, less than, greater than, equals
+	// See: https://support.atlassian.com/jira-software-cloud/docs/what-is-advanced-search-in-jira-cloud/
+	reservedChars := " '\"/-\\+&|!(){}[]^~*?:;<>="
+	if strings.ContainsAny(value, reservedChars) {
 		// Escape any existing quotes
 		escaped := strings.ReplaceAll(value, "\"", "\\\"")
 		return fmt.Sprintf("\"%s\"", escaped)
