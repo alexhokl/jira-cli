@@ -40,47 +40,47 @@ Use the transition command to change issue status.
 
 Examples:
   # Update issue summary
-  jira-cli update issue --key PROJ-123 --summary "New summary"
+  jira-cli update issue --id PROJ-123 --summary "New summary"
 
   # Update issue description
-  jira-cli update issue --key PROJ-123 --description "New description"
+  jira-cli update issue --id PROJ-123 --description "New description"
 
   # Update issue priority
-  jira-cli update issue --key PROJ-123 --priority High
+  jira-cli update issue --id PROJ-123 --priority High
 
   # Update assignee
-  jira-cli update issue --key PROJ-123 --assignee 5b10ac8d82e05b22cc7d4ef5
+  jira-cli update issue --id PROJ-123 --assignee 5b10ac8d82e05b22cc7d4ef5
 
   # Update labels (replaces existing labels)
-  jira-cli update issue --key PROJ-123 --labels "bug,critical"
+  jira-cli update issue --id PROJ-123 --labels "bug,critical"
 
   # Add labels (keeps existing labels)
-  jira-cli update issue --key PROJ-123 --add-label bug --add-label critical
+  jira-cli update issue --id PROJ-123 --add-label bug --add-label critical
 
   # Delete labels (keeps other existing labels)
-  jira-cli update issue --key PROJ-123 --delete-label obsolete
+  jira-cli update issue --id PROJ-123 --delete-label obsolete
 
   # Update multiple fields
-  jira-cli update issue --key PROJ-123 --summary "Updated" --priority High
+  jira-cli update issue --id PROJ-123 --summary "Updated" --priority High
 
   # Update without sending notifications
-  jira-cli update issue --key PROJ-123 --summary "Updated" --no-notify
+  jira-cli update issue --id PROJ-123 --summary "Updated" --no-notify
 
   # Link to another issue (this issue blocks PROJ-456)
   # Use 'jira-cli list link-types' to see available link type names
-  jira-cli update issue --key PROJ-123 --link-issue PROJ-456 --link-type Blocks
+  jira-cli update issue --id PROJ-123 --link-issue PROJ-456 --link-type Blocks
 
   # Update a custom field (text field)
-  jira-cli update issue --key PROJ-123 --custom-field "Team=Backend"
+  jira-cli update issue --id PROJ-123 --custom-field "Team=Backend"
 
   # Update multiple custom fields
-  jira-cli update issue --key PROJ-123 --custom-field "Team=Backend" --custom-field "Story Points=5"
+  jira-cli update issue --id PROJ-123 --custom-field "Team=Backend" --custom-field "Story Points=5"
 
   # Update a select list custom field (use the option value)
-  jira-cli update issue --key PROJ-123 --custom-field "Environment=Production"
+  jira-cli update issue --id PROJ-123 --custom-field "Environment=Production"
 
   # Clear a custom field value
-  jira-cli update issue --key PROJ-123 --custom-field "Team="`,
+  jira-cli update issue --id PROJ-123 --custom-field "Team="`,
 	RunE: runUpdateIssue,
 }
 
@@ -88,7 +88,7 @@ func init() {
 	updateCmd.AddCommand(updateIssueCmd)
 
 	flags := updateIssueCmd.Flags()
-	flags.StringVarP(&updateIssueOpts.issueKey, "key", "k", "", "Issue key (e.g., PROJ-123) (required)")
+	flags.StringVarP(&updateIssueOpts.issueKey, "id", "i", "", "Issue ID (e.g., PROJ-123) (required)")
 	flags.StringVarP(&updateIssueOpts.summary, "summary", "s", "", "Issue summary/title")
 	flags.StringVarP(&updateIssueOpts.description, "description", "d", "", "Issue description")
 	flags.StringVar(&updateIssueOpts.priority, "priority", "", "Priority (e.g., Highest, High, Medium, Low, Lowest)")
@@ -103,7 +103,7 @@ func init() {
 	flags.StringVar(&updateIssueOpts.linkType, "link-type", "", "Link type name (use 'jira-cli list link-types' to see available types)")
 	flags.StringArrayVar(&updateIssueOpts.customFields, "custom-field", nil, "Custom field to update in format 'name=value' (can be specified multiple times)")
 
-	updateIssueCmd.MarkFlagRequired("key")
+	updateIssueCmd.MarkFlagRequired("id")
 }
 
 func runUpdateIssue(_ *cobra.Command, _ []string) error {

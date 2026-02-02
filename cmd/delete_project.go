@@ -25,10 +25,10 @@ Note: You cannot delete archived projects. Restore them first using the Jira UI.
 
 Examples:
   # Delete a project (moves to recycle bin)
-  jira-cli delete project --key MYPROJ
+  jira-cli delete project --id MYPROJ
 
   # Permanently delete a project
-  jira-cli delete project --key MYPROJ --permanent`,
+  jira-cli delete project --id MYPROJ --permanent`,
 	RunE: runDeleteProject,
 }
 
@@ -36,9 +36,9 @@ func init() {
 	deleteCmd.AddCommand(deleteProjectCmd)
 
 	flags := deleteProjectCmd.Flags()
-	flags.StringVarP(&deleteProjectOpts.projectKey, "key", "k", "", "Project key or ID (required)")
+	flags.StringVarP(&deleteProjectOpts.projectKey, "id", "i", "", "Project ID or key (required)")
 	flags.BoolVar(&deleteProjectOpts.enableUndo, "permanent", false, "Permanently delete (skip recycle bin)")
-	deleteProjectCmd.MarkFlagRequired("key")
+	deleteProjectCmd.MarkFlagRequired("id")
 }
 
 func runDeleteProject(_ *cobra.Command, _ []string) error {
