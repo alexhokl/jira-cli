@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -14,21 +15,21 @@ import (
 )
 
 type updateIssueOptions struct {
-	issueKey     string
-	summary      string
-	description  string
-	priority     string
-	assignee     string
-	labels       string
-	addLabels    []string
-	deleteLabels []string
-	components   string
-	dueDate      string
-	sprint       string
-	noNotify     bool
-	linkIssue    string
-	linkType     string
-	customFields []string
+	issueKey        string
+	summary         string
+	descriptionFile string
+	priority        string
+	assignee        string
+	labels          string
+	addLabels       []string
+	deleteLabels    []string
+	components      string
+	dueDate         string
+	sprint          string
+	noNotify        bool
+	linkIssue       string
+	linkType        string
+	customFields    []string
 }
 
 var updateIssueOpts = updateIssueOptions{}
@@ -45,8 +46,8 @@ Examples:
   # Update issue summary
   jira-cli update issue --id PROJ-123 --summary "New summary"
 
-  # Update issue description
-  jira-cli update issue --id PROJ-123 --description "New description"
+  # Update issue description from file
+  jira-cli update issue --id PROJ-123 --description-file description.md
 
   # Update issue priority
   jira-cli update issue --id PROJ-123 --priority High
@@ -100,7 +101,7 @@ func init() {
 	flags := updateIssueCmd.Flags()
 	flags.StringVarP(&updateIssueOpts.issueKey, "id", "i", "", "Issue ID (e.g., PROJ-123) (required)")
 	flags.StringVarP(&updateIssueOpts.summary, "summary", "s", "", "Issue summary/title")
-	flags.StringVarP(&updateIssueOpts.description, "description", "d", "", "Issue description")
+	flags.StringVarP(&updateIssueOpts.descriptionFile, "description-file", "d", "", "Path to a file containing issue description in markdown")
 	flags.StringVar(&updateIssueOpts.priority, "priority", "", "Priority (e.g., Highest, High, Medium, Low, Lowest)")
 	flags.StringVarP(&updateIssueOpts.assignee, "assignee", "a", "", "Assignee account ID (use 'me' for yourself, 'none' to unassign)")
 	flags.StringVarP(&updateIssueOpts.labels, "labels", "l", "", "Comma-separated labels (replaces existing)")
@@ -120,7 +121,7 @@ func init() {
 func runUpdateIssue(_ *cobra.Command, _ []string) error {
 	// Check that at least one field is being updated
 	if updateIssueOpts.summary == "" &&
-		updateIssueOpts.description == "" &&
+		updateIssueOpts.descriptionFile == "" &&
 		updateIssueOpts.priority == "" &&
 		updateIssueOpts.assignee == "" &&
 		updateIssueOpts.labels == "" &&
@@ -154,8 +155,15 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		fields["summary"] = updateIssueOpts.summary
 	}
 
-	if updateIssueOpts.description != "" {
-		fields["description"] = newADFDocument(updateIssueOpts.description)
+	if updateIssueOpts.descriptionFile != "" {
+		content, err := os.ReadFile(updateIssueOpts.descriptionFile)
+		if err != nil {
+			return fmt.Errorf("failed to read description file: %w", err)
+		}
+		description := strings.TrimSpace(string(content))
+		if description != "" {
+			fields["description"] = newADFDocument(description)
+		}
 	}
 
 	if updateIssueOpts.priority != "" {
