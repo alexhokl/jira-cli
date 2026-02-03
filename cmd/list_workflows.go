@@ -85,7 +85,6 @@ func runListWorkflows(cmd *cobra.Command, _ []string) error {
 			workflows = append(workflows, workflowInfo{
 				name:        id.GetName(),
 				description: wf.GetDescription(),
-				isDefault:   wf.GetIsDefault(),
 			})
 		}
 
@@ -110,19 +109,15 @@ func runListWorkflows(cmd *cobra.Command, _ []string) error {
 	cyan := color.New(color.FgCyan).SprintFunc()
 
 	w := newTableWriter(os.Stdout, 0, 2)
-	w.row(cyan("NAME"), cyan("DEFAULT"), cyan("DESCRIPTION"))
+	w.row(cyan("NAME"), cyan("DESCRIPTION"))
 
 	for _, wf := range workflows {
-		defaultStr := ""
-		if wf.isDefault {
-			defaultStr = "Yes"
-		}
 		// Truncate description if too long
 		desc := wf.description
 		if len(desc) > 60 {
 			desc = desc[:57] + "..."
 		}
-		w.row(wf.name, defaultStr, desc)
+		w.row(wf.name, desc)
 	}
 	w.flush()
 
@@ -134,5 +129,4 @@ func runListWorkflows(cmd *cobra.Command, _ []string) error {
 type workflowInfo struct {
 	name        string
 	description string
-	isDefault   bool
 }
