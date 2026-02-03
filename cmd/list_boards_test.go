@@ -94,6 +94,70 @@ func TestListBoardsAPI_WithFilters(t *testing.T) {
 	}
 }
 
+func TestFilterBoardsByType(t *testing.T) {
+	// Test the client-side filtering function that works around the swagger-generated code bug
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		// Return all board types
+		boards := []map[string]interface{}{
+			buildBoard(1, "Sprint Board", "scrum", "PROJ"),
+			buildBoard(2, "Kanban Board", "kanban", "PROJ"),
+			buildBoard(3, "Another Sprint Board", "scrum", "TEST"),
+			buildBoard(4, "Simple Board", "simple", "TEST"),
+		}
+		response := buildBoardsResponse(boards, true, 0, 50)
+		w.Write([]byte(response))
+	}))
+	defer server.Close()
+
+	client := newMockSoftwareClientWithServer(server.URL)
+	ctx := mockSoftwareAuthContext()
+
+	result, _, err := client.BoardAPI.GetAllBoards(ctx).Execute()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	allBoards := result.GetValues()
+	if len(allBoards) != 4 {
+		t.Fatalf("expected 4 boards, got %d", len(allBoards))
+	}
+
+	// Test filtering by "scrum" type
+	scrumBoards := filterBoardsByType(allBoards, "scrum")
+	if len(scrumBoards) != 2 {
+		t.Errorf("expected 2 scrum boards, got %d", len(scrumBoards))
+	}
+	for _, board := range scrumBoards {
+		if board.GetType() != "scrum" {
+			t.Errorf("expected board type 'scrum', got %s", board.GetType())
+		}
+	}
+
+	// Test filtering by "kanban" type
+	kanbanBoards := filterBoardsByType(allBoards, "kanban")
+	if len(kanbanBoards) != 1 {
+		t.Errorf("expected 1 kanban board, got %d", len(kanbanBoards))
+	}
+	if kanbanBoards[0].GetName() != "Kanban Board" {
+		t.Errorf("expected 'Kanban Board', got %s", kanbanBoards[0].GetName())
+	}
+
+	// Test filtering by non-existent type
+	nonExistentBoards := filterBoardsByType(allBoards, "agility")
+	if len(nonExistentBoards) != 0 {
+		t.Errorf("expected 0 boards for non-existent type, got %d", len(nonExistentBoards))
+	}
+
+	// Test filtering with empty type (should return empty)
+	emptyTypeBoards := filterBoardsByType(allBoards, "")
+	if len(emptyTypeBoards) != 0 {
+		t.Errorf("expected 0 boards for empty type filter, got %d", len(emptyTypeBoards))
+	}
+}
+
 func TestListBoardsAPI_EmptyResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

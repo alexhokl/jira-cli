@@ -36,6 +36,19 @@ func init() {
 	flags.BoolVar(&listBoardsOpts.orderByName, "order-by-name", false, "Order results by name")
 }
 
+// filterBoardsByType filters boards by the specified type.
+// This is a workaround for the swagger-generated code which incorrectly serializes
+// the type parameter as type[type]=value instead of type=value.
+func filterBoardsByType(boards []swagger_software.GetAllBoards200ResponseValuesInner, boardType string) []swagger_software.GetAllBoards200ResponseValuesInner {
+	var filtered []swagger_software.GetAllBoards200ResponseValuesInner
+	for _, board := range boards {
+		if board.GetType() == boardType {
+			filtered = append(filtered, board)
+		}
+	}
+	return filtered
+}
+
 func runListBoards(_ *cobra.Command, _ []string) error {
 	client := newSoftwareClient()
 	ctx := getSoftwareAuthContext()
@@ -52,9 +65,9 @@ func runListBoards(_ *cobra.Command, _ []string) error {
 		if listBoardsOpts.projectKeyOrId != "" {
 			request = request.ProjectKeyOrId(listBoardsOpts.projectKeyOrId)
 		}
-		if listBoardsOpts.boardType != "" {
-			request = request.Type_(map[string]interface{}{"type": listBoardsOpts.boardType})
-		}
+		// Note: We intentionally do NOT use the generated Type_() method here
+		// because the swagger-generated code incorrectly serializes the type parameter
+		// as type[type]=scrum instead of type=scrum. We filter by type client-side instead.
 		if listBoardsOpts.includePrivate {
 			request = request.IncludePrivate(true)
 		}
@@ -74,6 +87,11 @@ func runListBoards(_ *cobra.Command, _ []string) error {
 		}
 
 		startAt = result.GetStartAt() + int64(result.GetMaxResults())
+	}
+
+	// Filter by board type client-side (workaround for swagger-generated code bug)
+	if listBoardsOpts.boardType != "" {
+		allBoards = filterBoardsByType(allBoards, listBoardsOpts.boardType)
 	}
 
 	if len(allBoards) == 0 {
