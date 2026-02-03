@@ -162,7 +162,7 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		}
 		description := strings.TrimSpace(string(content))
 		if description != "" {
-			fields["description"] = newADFDocument(description)
+			fields["description"] = convertMarkdownToADF(description)
 		}
 	}
 

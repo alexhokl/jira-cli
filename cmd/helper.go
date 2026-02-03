@@ -441,6 +441,496 @@ func newADFDocument(text string) map[string]any {
 	}
 }
 
+// convertMarkdownToADF converts markdown text to Atlassian Document Format (ADF).
+// This preserves markdown formatting like headings, lists, code blocks, etc.
+func convertMarkdownToADF(markdown string) map[string]any {
+	lines := strings.Split(markdown, "\n")
+	var content []map[string]any
+
+	i := 0
+	for i < len(lines) {
+		line := lines[i]
+
+		// Skip empty lines
+		if strings.TrimSpace(line) == "" {
+			i++
+			continue
+		}
+
+		// Check for code block
+		if strings.HasPrefix(line, "```") {
+			language := strings.TrimPrefix(line, "```")
+			var codeLines []string
+			i++
+			for i < len(lines) && !strings.HasPrefix(lines[i], "```") {
+				codeLines = append(codeLines, lines[i])
+				i++
+			}
+			i++ // skip closing ```
+
+			codeBlock := map[string]any{
+				"type": "codeBlock",
+				"content": []map[string]any{
+					{
+						"type": "text",
+						"text": strings.Join(codeLines, "\n"),
+					},
+				},
+			}
+			if language != "" {
+				codeBlock["attrs"] = map[string]any{
+					"language": language,
+				}
+			}
+			content = append(content, codeBlock)
+			continue
+		}
+
+		// Check for heading
+		if strings.HasPrefix(line, "#") {
+			level := 0
+			for _, c := range line {
+				if c == '#' {
+					level++
+				} else {
+					break
+				}
+			}
+			if level > 0 && level <= 6 {
+				text := strings.TrimSpace(strings.TrimLeft(line, "#"))
+				content = append(content, map[string]any{
+					"type": "heading",
+					"attrs": map[string]any{
+						"level": level,
+					},
+					"content": parseInlineMarkdown(text),
+				})
+				i++
+				continue
+			}
+		}
+
+		// Check for horizontal rule
+		if line == "---" || line == "***" || line == "___" {
+			content = append(content, map[string]any{
+				"type": "rule",
+			})
+			i++
+			continue
+		}
+
+		// Check for blockquote
+		if strings.HasPrefix(line, "> ") {
+			var quoteContent []map[string]any
+			for i < len(lines) && strings.HasPrefix(lines[i], "> ") {
+				quoteLine := strings.TrimPrefix(lines[i], "> ")
+				quoteContent = append(quoteContent, map[string]any{
+					"type":    "paragraph",
+					"content": parseInlineMarkdown(quoteLine),
+				})
+				i++
+			}
+			content = append(content, map[string]any{
+				"type":    "blockquote",
+				"content": quoteContent,
+			})
+			continue
+		}
+
+		// Check for unordered list
+		if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
+			listItems, newIndex := parseList(lines, i, false)
+			content = append(content, map[string]any{
+				"type":    "bulletList",
+				"content": listItems,
+			})
+			i = newIndex
+			continue
+		}
+
+		// Check for ordered list
+		if isOrderedListItem(line) {
+			listItems, newIndex := parseList(lines, i, true)
+			content = append(content, map[string]any{
+				"type":    "orderedList",
+				"content": listItems,
+			})
+			i = newIndex
+			continue
+		}
+
+		// Check for table
+		if strings.HasPrefix(line, "|") && strings.HasSuffix(strings.TrimSpace(line), "|") {
+			tableRows, newIndex := parseTable(lines, i)
+			if len(tableRows) > 0 {
+				content = append(content, map[string]any{
+					"type":    "table",
+					"attrs":   map[string]any{"isNumberColumnEnabled": false, "layout": "default"},
+					"content": tableRows,
+				})
+			}
+			i = newIndex
+			continue
+		}
+
+		// Regular paragraph
+		content = append(content, map[string]any{
+			"type":    "paragraph",
+			"content": parseInlineMarkdown(line),
+		})
+		i++
+	}
+
+	return map[string]any{
+		"type":    "doc",
+		"version": 1,
+		"content": content,
+	}
+}
+
+// parseInlineMarkdown parses inline markdown formatting (bold, italic, code, links, etc.)
+func parseInlineMarkdown(text string) []map[string]any {
+	if text == "" {
+		return nil
+	}
+
+	var result []map[string]any
+	remaining := text
+
+	for len(remaining) > 0 {
+		// Check for inline code
+		if idx := strings.Index(remaining, "`"); idx != -1 {
+			endIdx := strings.Index(remaining[idx+1:], "`")
+			if endIdx != -1 {
+				// Add text before code
+				if idx > 0 {
+					result = append(result, parseFormattedText(remaining[:idx])...)
+				}
+				// Add code
+				codeText := remaining[idx+1 : idx+1+endIdx]
+				result = append(result, map[string]any{
+					"type": "text",
+					"text": codeText,
+					"marks": []map[string]any{
+						{"type": "code"},
+					},
+				})
+				remaining = remaining[idx+1+endIdx+1:]
+				continue
+			}
+		}
+
+		// Check for links [text](url)
+		if idx := strings.Index(remaining, "["); idx != -1 {
+			endBracket := strings.Index(remaining[idx:], "](")
+			if endBracket != -1 {
+				endParen := strings.Index(remaining[idx+endBracket+2:], ")")
+				if endParen != -1 {
+					// Add text before link
+					if idx > 0 {
+						result = append(result, parseFormattedText(remaining[:idx])...)
+					}
+					linkText := remaining[idx+1 : idx+endBracket]
+					linkURL := remaining[idx+endBracket+2 : idx+endBracket+2+endParen]
+					result = append(result, map[string]any{
+						"type": "text",
+						"text": linkText,
+						"marks": []map[string]any{
+							{
+								"type": "link",
+								"attrs": map[string]any{
+									"href": linkURL,
+								},
+							},
+						},
+					})
+					remaining = remaining[idx+endBracket+2+endParen+1:]
+					continue
+				}
+			}
+		}
+
+		// No more special inline elements, parse the rest for bold/italic
+		result = append(result, parseFormattedText(remaining)...)
+		break
+	}
+
+	return result
+}
+
+// parseFormattedText parses bold and italic formatting
+func parseFormattedText(text string) []map[string]any {
+	if text == "" {
+		return nil
+	}
+
+	var result []map[string]any
+	remaining := text
+
+	for len(remaining) > 0 {
+		// Check for bold **text**
+		if idx := strings.Index(remaining, "**"); idx != -1 {
+			endIdx := strings.Index(remaining[idx+2:], "**")
+			if endIdx != -1 {
+				// Add text before bold
+				if idx > 0 {
+					result = append(result, map[string]any{
+						"type": "text",
+						"text": remaining[:idx],
+					})
+				}
+				// Add bold text
+				boldText := remaining[idx+2 : idx+2+endIdx]
+				result = append(result, map[string]any{
+					"type": "text",
+					"text": boldText,
+					"marks": []map[string]any{
+						{"type": "strong"},
+					},
+				})
+				remaining = remaining[idx+2+endIdx+2:]
+				continue
+			}
+		}
+
+		// Check for italic *text* (but not **)
+		if idx := strings.Index(remaining, "*"); idx != -1 {
+			// Make sure it's not **
+			if idx+1 < len(remaining) && remaining[idx+1] != '*' {
+				endIdx := strings.Index(remaining[idx+1:], "*")
+				if endIdx != -1 && (idx+1+endIdx+1 >= len(remaining) || remaining[idx+1+endIdx+1] != '*') {
+					// Add text before italic
+					if idx > 0 {
+						result = append(result, map[string]any{
+							"type": "text",
+							"text": remaining[:idx],
+						})
+					}
+					// Add italic text
+					italicText := remaining[idx+1 : idx+1+endIdx]
+					result = append(result, map[string]any{
+						"type": "text",
+						"text": italicText,
+						"marks": []map[string]any{
+							{"type": "em"},
+						},
+					})
+					remaining = remaining[idx+1+endIdx+1:]
+					continue
+				}
+			}
+		}
+
+		// Check for strikethrough ~~text~~
+		if idx := strings.Index(remaining, "~~"); idx != -1 {
+			endIdx := strings.Index(remaining[idx+2:], "~~")
+			if endIdx != -1 {
+				// Add text before strikethrough
+				if idx > 0 {
+					result = append(result, map[string]any{
+						"type": "text",
+						"text": remaining[:idx],
+					})
+				}
+				// Add strikethrough text
+				strikeText := remaining[idx+2 : idx+2+endIdx]
+				result = append(result, map[string]any{
+					"type": "text",
+					"text": strikeText,
+					"marks": []map[string]any{
+						{"type": "strike"},
+					},
+				})
+				remaining = remaining[idx+2+endIdx+2:]
+				continue
+			}
+		}
+
+		// No more formatting, add remaining text
+		result = append(result, map[string]any{
+			"type": "text",
+			"text": remaining,
+		})
+		break
+	}
+
+	return result
+}
+
+// isOrderedListItem checks if a line is an ordered list item (e.g., "1. text")
+func isOrderedListItem(line string) bool {
+	for i, c := range line {
+		if c >= '0' && c <= '9' {
+			continue
+		}
+		if c == '.' && i > 0 && i+1 < len(line) && line[i+1] == ' ' {
+			return true
+		}
+		break
+	}
+	return false
+}
+
+// getListIndent returns the indentation level of a list item
+func getListIndent(line string) int {
+	indent := 0
+	for _, c := range line {
+		if c == ' ' {
+			indent++
+		} else if c == '\t' {
+			indent += 2
+		} else {
+			break
+		}
+	}
+	return indent / 2
+}
+
+// parseList parses a list (bullet or ordered) and returns list items
+func parseList(lines []string, startIndex int, ordered bool) ([]map[string]any, int) {
+	var items []map[string]any
+	i := startIndex
+	baseIndent := getListIndent(lines[i])
+
+	for i < len(lines) {
+		line := lines[i]
+		trimmedLine := strings.TrimSpace(line)
+
+		// Empty line ends the list
+		if trimmedLine == "" {
+			break
+		}
+
+		currentIndent := getListIndent(line)
+
+		// If we're back to a lower indent, we're done with this list level
+		if currentIndent < baseIndent {
+			break
+		}
+
+		// Check if this is a list item at our level
+		isUnordered := strings.HasPrefix(trimmedLine, "- ") || strings.HasPrefix(trimmedLine, "* ")
+		isOrdered := isOrderedListItem(trimmedLine)
+
+		if currentIndent == baseIndent && (isUnordered || isOrdered) {
+			// Extract the text after the list marker
+			var itemText string
+			if isUnordered {
+				if strings.HasPrefix(trimmedLine, "- ") {
+					itemText = strings.TrimPrefix(trimmedLine, "- ")
+				} else {
+					itemText = strings.TrimPrefix(trimmedLine, "* ")
+				}
+			} else {
+				// Remove "N. " prefix
+				dotIdx := strings.Index(trimmedLine, ". ")
+				if dotIdx != -1 {
+					itemText = trimmedLine[dotIdx+2:]
+				}
+			}
+
+			itemContent := []map[string]any{
+				{
+					"type":    "paragraph",
+					"content": parseInlineMarkdown(itemText),
+				},
+			}
+
+			// Check for nested list
+			i++
+			if i < len(lines) {
+				nextIndent := getListIndent(lines[i])
+				nextTrimmed := strings.TrimSpace(lines[i])
+				nextIsUnordered := strings.HasPrefix(nextTrimmed, "- ") || strings.HasPrefix(nextTrimmed, "* ")
+				nextIsOrdered := isOrderedListItem(nextTrimmed)
+
+				if nextIndent > baseIndent && (nextIsUnordered || nextIsOrdered) {
+					nestedItems, newIndex := parseList(lines, i, nextIsOrdered)
+					if nextIsOrdered {
+						itemContent = append(itemContent, map[string]any{
+							"type":    "orderedList",
+							"content": nestedItems,
+						})
+					} else {
+						itemContent = append(itemContent, map[string]any{
+							"type":    "bulletList",
+							"content": nestedItems,
+						})
+					}
+					i = newIndex
+				}
+			}
+
+			items = append(items, map[string]any{
+				"type":    "listItem",
+				"content": itemContent,
+			})
+		} else {
+			break
+		}
+	}
+
+	return items, i
+}
+
+// parseTable parses a markdown table and returns table rows
+func parseTable(lines []string, startIndex int) ([]map[string]any, int) {
+	var rows []map[string]any
+	i := startIndex
+
+	for i < len(lines) {
+		line := strings.TrimSpace(lines[i])
+
+		// Check if this is still a table row
+		if !strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|") {
+			break
+		}
+
+		// Skip separator row (|---|---|)
+		if strings.Contains(line, "---") {
+			i++
+			continue
+		}
+
+		// Parse cells
+		cells := strings.Split(line, "|")
+		var cellContent []map[string]any
+
+		for _, cell := range cells {
+			cell = strings.TrimSpace(cell)
+			if cell == "" {
+				continue
+			}
+
+			cellContent = append(cellContent, map[string]any{
+				"type": "tableCell",
+				"attrs": map[string]any{
+					"colspan":  1,
+					"rowspan":  1,
+					"colwidth": nil,
+				},
+				"content": []map[string]any{
+					{
+						"type":    "paragraph",
+						"content": parseInlineMarkdown(cell),
+					},
+				},
+			})
+		}
+
+		if len(cellContent) > 0 {
+			rows = append(rows, map[string]any{
+				"type":    "tableRow",
+				"content": cellContent,
+			})
+		}
+
+		i++
+	}
+
+	return rows, i
+}
+
 // extractProjectKeyFromIssueKey extracts the project key from an issue key.
 // For example, "PROJ-123" returns "PROJ", "MYPROJECT-456" returns "MYPROJECT".
 // If no dash is found, the entire issue key is returned.

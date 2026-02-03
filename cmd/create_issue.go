@@ -95,7 +95,7 @@ func runCreateIssue(_ *cobra.Command, _ []string) error {
 	}
 
 	if strings.TrimSpace(description) != "" {
-		fields["description"] = newADFDocument(description)
+		fields["description"] = convertMarkdownToADF(description)
 	}
 
 	if createIssueOpts.priority != "" {
@@ -198,4 +198,4 @@ func runCreateIssue(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-// Note: newADFDocument is defined in helper.go
+// Note: convertMarkdownToADF is defined in helper.go

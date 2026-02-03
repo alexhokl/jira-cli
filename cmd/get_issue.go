@@ -14,6 +14,7 @@ import (
 type getIssueOptions struct {
 	id               string
 	showCustomFields bool
+	descriptionOnly  bool
 }
 
 var getIssueOpts = getIssueOptions{}
@@ -29,7 +30,10 @@ Examples:
   jira-cli get issue -i PROJ-123
 
   # Get issue details including custom fields
-  jira-cli get issue -i PROJ-123 --show-custom-fields`,
+  jira-cli get issue -i PROJ-123 --show-custom-fields
+
+  # Get only the description in markdown format
+  jira-cli get issue -i PROJ-123 --description-only`,
 	RunE: runGetIssue,
 }
 
@@ -39,6 +43,7 @@ func init() {
 	flags := getIssueCmd.Flags()
 	flags.StringVarP(&getIssueOpts.id, "id", "i", "", "Issue ID")
 	flags.BoolVarP(&getIssueOpts.showCustomFields, "show-custom-fields", "c", false, "Show custom field values")
+	flags.BoolVar(&getIssueOpts.descriptionOnly, "description-only", false, "Output only the description in markdown format")
 
 	getIssueCmd.MarkFlagRequired("id")
 }
@@ -48,6 +53,16 @@ func runGetIssue(_ *cobra.Command, _ []string) error {
 	issue, _, err := client.IssuesAPI.GetIssue(getAuthContext(), getIssueOpts.id).Execute()
 	if err != nil {
 		return wrapAPIError(err)
+	}
+
+	// Handle description-only mode
+	if getIssueOpts.descriptionOnly {
+		descriptionObject := issue.Fields["description"]
+		if descriptionObject != nil {
+			markdown := convertADFToMarkdown(descriptionObject)
+			fmt.Print(markdown)
+		}
+		return nil
 	}
 
 	color.NoColor = noColor
@@ -67,9 +82,9 @@ func runGetIssue(_ *cobra.Command, _ []string) error {
 
 	descriptionObject := issue.Fields["description"]
 	if descriptionObject != nil {
-		description := extractTextFromADF(descriptionObject)
+		description := convertADFToMarkdown(descriptionObject)
 		if description != "" {
-			fmt.Printf("\n%s\n", description)
+			fmt.Printf("\n%s", description)
 		}
 	}
 
@@ -440,4 +455,373 @@ func extractTextFromBlock(block interface{}) string {
 	}
 
 	return strings.Join(texts, "")
+}
+
+// convertADFToMarkdown converts Atlassian Document Format (ADF) to markdown.
+// This preserves the markdown formatting used in JIRA.
+func convertADFToMarkdown(adf any) string {
+	adfMap, ok := adf.(map[string]any)
+	if !ok {
+		return ""
+	}
+
+	content, ok := adfMap["content"].([]any)
+	if !ok {
+		return ""
+	}
+
+	var result strings.Builder
+	for i, block := range content {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+		convertBlockToMarkdown(block, &result, 0)
+	}
+
+	return result.String()
+}
+
+// convertBlockToMarkdown converts a single ADF block to markdown
+func convertBlockToMarkdown(block any, result *strings.Builder, depth int) {
+	blockMap, ok := block.(map[string]any)
+	if !ok {
+		return
+	}
+
+	blockType, _ := blockMap["type"].(string)
+
+	switch blockType {
+	case "paragraph":
+		convertInlineContent(blockMap, result)
+		result.WriteString("\n")
+
+	case "heading":
+		level := 1
+		if attrs, ok := blockMap["attrs"].(map[string]any); ok {
+			if l, ok := attrs["level"].(float64); ok {
+				level = int(l)
+			}
+		}
+		result.WriteString(strings.Repeat("#", level) + " ")
+		convertInlineContent(blockMap, result)
+		result.WriteString("\n")
+
+	case "bulletList":
+		convertListItems(blockMap, result, depth, false)
+
+	case "orderedList":
+		convertListItems(blockMap, result, depth, true)
+
+	case "listItem":
+		// List items are handled by convertListItems
+		if content, ok := blockMap["content"].([]any); ok {
+			for _, item := range content {
+				convertBlockToMarkdown(item, result, depth)
+			}
+		}
+
+	case "codeBlock":
+		language := ""
+		if attrs, ok := blockMap["attrs"].(map[string]any); ok {
+			if lang, ok := attrs["language"].(string); ok {
+				language = lang
+			}
+		}
+		result.WriteString("```" + language + "\n")
+		convertInlineContent(blockMap, result)
+		result.WriteString("\n```\n")
+
+	case "blockquote":
+		if content, ok := blockMap["content"].([]any); ok {
+			for _, item := range content {
+				result.WriteString("> ")
+				convertBlockToMarkdown(item, result, depth)
+			}
+		}
+
+	case "rule":
+		result.WriteString("---\n")
+
+	case "table":
+		convertTable(blockMap, result)
+
+	case "mediaSingle", "mediaGroup":
+		// Media elements - output placeholder
+		if content, ok := blockMap["content"].([]any); ok {
+			for _, item := range content {
+				if mediaMap, ok := item.(map[string]any); ok {
+					if mediaMap["type"] == "media" {
+						if attrs, ok := mediaMap["attrs"].(map[string]any); ok {
+							if alt, ok := attrs["alt"].(string); ok && alt != "" {
+								result.WriteString(fmt.Sprintf("![%s](media)\n", alt))
+							} else {
+								result.WriteString("![media](media)\n")
+							}
+						}
+					}
+				}
+			}
+		}
+
+	case "panel":
+		panelType := "info"
+		if attrs, ok := blockMap["attrs"].(map[string]any); ok {
+			if pt, ok := attrs["panelType"].(string); ok {
+				panelType = pt
+			}
+		}
+		result.WriteString(fmt.Sprintf("> **%s**\n", strings.ToUpper(panelType)))
+		if content, ok := blockMap["content"].([]any); ok {
+			for _, item := range content {
+				result.WriteString("> ")
+				convertBlockToMarkdown(item, result, depth)
+			}
+		}
+
+	default:
+		// For unknown block types, try to extract text content
+		convertInlineContent(blockMap, result)
+		if blockMap["content"] != nil {
+			result.WriteString("\n")
+		}
+	}
+}
+
+// convertInlineContent converts inline content (text, marks) to markdown
+func convertInlineContent(blockMap map[string]any, result *strings.Builder) {
+	content, ok := blockMap["content"].([]any)
+	if !ok {
+		return
+	}
+
+	for _, item := range content {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		itemType, _ := itemMap["type"].(string)
+
+		switch itemType {
+		case "text":
+			text, _ := itemMap["text"].(string)
+			text = applyMarks(text, itemMap)
+			result.WriteString(text)
+
+		case "hardBreak":
+			result.WriteString("\n")
+
+		case "emoji":
+			if attrs, ok := itemMap["attrs"].(map[string]any); ok {
+				if shortName, ok := attrs["shortName"].(string); ok {
+					result.WriteString(shortName)
+				}
+			}
+
+		case "mention":
+			if attrs, ok := itemMap["attrs"].(map[string]any); ok {
+				if text, ok := attrs["text"].(string); ok {
+					result.WriteString(text)
+				}
+			}
+
+		case "inlineCard":
+			if attrs, ok := itemMap["attrs"].(map[string]any); ok {
+				if url, ok := attrs["url"].(string); ok {
+					result.WriteString(url)
+				}
+			}
+		}
+	}
+}
+
+// applyMarks applies text formatting marks (bold, italic, etc.)
+func applyMarks(text string, itemMap map[string]any) string {
+	marks, ok := itemMap["marks"].([]any)
+	if !ok {
+		return text
+	}
+
+	// Track which marks to apply
+	var hasBold, hasItalic, hasStrike, hasCode, hasUnderline bool
+	var linkURL string
+
+	for _, mark := range marks {
+		markMap, ok := mark.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		markType, _ := markMap["type"].(string)
+
+		switch markType {
+		case "strong":
+			hasBold = true
+		case "em":
+			hasItalic = true
+		case "strike":
+			hasStrike = true
+		case "code":
+			hasCode = true
+		case "underline":
+			hasUnderline = true
+		case "link":
+			if attrs, ok := markMap["attrs"].(map[string]any); ok {
+				if href, ok := attrs["href"].(string); ok {
+					linkURL = href
+				}
+			}
+		}
+	}
+
+	// Apply marks (order matters for proper nesting)
+	if hasCode {
+		text = "`" + text + "`"
+	}
+	if hasStrike {
+		text = "~~" + text + "~~"
+	}
+	if hasItalic {
+		text = "*" + text + "*"
+	}
+	if hasBold {
+		text = "**" + text + "**"
+	}
+	if hasUnderline {
+		// Markdown doesn't have native underline, use HTML
+		text = "<u>" + text + "</u>"
+	}
+	if linkURL != "" {
+		text = "[" + text + "](" + linkURL + ")"
+	}
+
+	return text
+}
+
+// convertListItems converts list items to markdown
+func convertListItems(blockMap map[string]any, result *strings.Builder, depth int, ordered bool) {
+	content, ok := blockMap["content"].([]any)
+	if !ok {
+		return
+	}
+
+	indent := strings.Repeat("  ", depth)
+
+	for i, item := range content {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		// Write list marker
+		if ordered {
+			result.WriteString(fmt.Sprintf("%s%d. ", indent, i+1))
+		} else {
+			result.WriteString(indent + "- ")
+		}
+
+		// Process list item content
+		if itemContent, ok := itemMap["content"].([]any); ok {
+			for j, contentItem := range itemContent {
+				contentMap, ok := contentItem.(map[string]any)
+				if !ok {
+					continue
+				}
+
+				contentType, _ := contentMap["type"].(string)
+
+				if contentType == "paragraph" {
+					convertInlineContent(contentMap, result)
+					if j == 0 {
+						result.WriteString("\n")
+					}
+				} else if contentType == "bulletList" {
+					if j > 0 {
+						result.WriteString("\n")
+					}
+					convertListItems(contentMap, result, depth+1, false)
+				} else if contentType == "orderedList" {
+					if j > 0 {
+						result.WriteString("\n")
+					}
+					convertListItems(contentMap, result, depth+1, true)
+				}
+			}
+		}
+	}
+}
+
+// convertTable converts ADF table to markdown table
+func convertTable(blockMap map[string]any, result *strings.Builder) {
+	content, ok := blockMap["content"].([]any)
+	if !ok {
+		return
+	}
+
+	var rows [][]string
+	var maxCols int
+
+	// Extract all cells
+	for _, row := range content {
+		rowMap, ok := row.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		if rowMap["type"] != "tableRow" {
+			continue
+		}
+
+		rowContent, ok := rowMap["content"].([]any)
+		if !ok {
+			continue
+		}
+
+		var cells []string
+		for _, cell := range rowContent {
+			cellMap, ok := cell.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			var cellText strings.Builder
+			if cellContent, ok := cellMap["content"].([]any); ok {
+				for _, item := range cellContent {
+					itemMap, ok := item.(map[string]any)
+					if !ok {
+						continue
+					}
+					if itemMap["type"] == "paragraph" {
+						convertInlineContent(itemMap, &cellText)
+					}
+				}
+			}
+			cells = append(cells, cellText.String())
+		}
+
+		if len(cells) > maxCols {
+			maxCols = len(cells)
+		}
+		rows = append(rows, cells)
+	}
+
+	if len(rows) == 0 {
+		return
+	}
+
+	// Write header row
+	if len(rows) > 0 {
+		result.WriteString("| " + strings.Join(rows[0], " | ") + " |\n")
+		// Write separator
+		sep := make([]string, len(rows[0]))
+		for i := range sep {
+			sep[i] = "---"
+		}
+		result.WriteString("| " + strings.Join(sep, " | ") + " |\n")
+	}
+
+	// Write data rows
+	for i := 1; i < len(rows); i++ {
+		result.WriteString("| " + strings.Join(rows[i], " | ") + " |\n")
+	}
 }
