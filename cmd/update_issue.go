@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/alexhokl/jira-cli/swagger"
+	"github.com/alexhokl/jira-cli/swagger_software"
 )
 
 type updateIssueOptions struct {
@@ -23,6 +24,7 @@ type updateIssueOptions struct {
 	deleteLabels []string
 	components   string
 	dueDate      string
+	sprint       string
 	noNotify     bool
 	linkIssue    string
 	linkType     string
@@ -80,6 +82,13 @@ Examples:
   # Update a select list custom field (use the option value)
   jira-cli update issue --id PROJ-123 --custom-field "Environment=Production"
 
+  # Move issue to a sprint (by ID or name)
+  jira-cli update issue --id PROJ-123 --sprint 42
+  jira-cli update issue --id PROJ-123 --sprint "Sprint 5"
+
+  # Move issue to backlog (remove from sprint)
+  jira-cli update issue --id PROJ-123 --sprint none
+
   # Clear a custom field value
   jira-cli update issue --id PROJ-123 --custom-field "Team="`,
 	RunE: runUpdateIssue,
@@ -99,6 +108,7 @@ func init() {
 	flags.StringArrayVar(&updateIssueOpts.deleteLabels, "delete-label", nil, "Delete a label (keeps others, can be specified multiple times)")
 	flags.StringVarP(&updateIssueOpts.components, "components", "c", "", "Comma-separated component names (replaces existing)")
 	flags.StringVar(&updateIssueOpts.dueDate, "due-date", "", "Due date (format: 2006-01-02, use 'none' to clear)")
+	flags.StringVar(&updateIssueOpts.sprint, "sprint", "", "Sprint ID or name (use 'none' to move to backlog)")
 	flags.BoolVar(&updateIssueOpts.noNotify, "no-notify", false, "Don't send notification emails")
 	flags.StringVar(&updateIssueOpts.linkIssue, "link-issue", "", "Issue key to link to (e.g., PROJ-456)")
 	flags.StringVar(&updateIssueOpts.linkType, "link-type", "", "Link type name (use 'jira-cli list link-types' to see available types)")
@@ -118,6 +128,7 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		len(updateIssueOpts.deleteLabels) == 0 &&
 		updateIssueOpts.components == "" &&
 		updateIssueOpts.dueDate == "" &&
+		updateIssueOpts.sprint == "" &&
 		updateIssueOpts.linkIssue == "" &&
 		len(updateIssueOpts.customFields) == 0 {
 		return fmt.Errorf("at least one field must be specified to update")
@@ -334,6 +345,13 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		}
 
 		fmt.Printf("Issue %s linked to %s with type '%s'\n", updateIssueOpts.issueKey, updateIssueOpts.linkIssue, updateIssueOpts.linkType)
+	}
+
+	// Handle sprint update if specified
+	if updateIssueOpts.sprint != "" {
+		if err := updateIssueSprint(updateIssueOpts.issueKey, updateIssueOpts.sprint); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -739,4 +757,54 @@ func formatOptionValue(valueName string, allowedValues []interface{}) map[string
 	return map[string]interface{}{
 		"value": valueName,
 	}
+}
+
+// updateIssueSprint moves an issue to a sprint or to the backlog
+func updateIssueSprint(issueKey, sprint string) error {
+	softwareClient := newSoftwareClient()
+	softwareCtx := getSoftwareAuthContext()
+
+	// Extract project key from issue key for sprint name lookup
+	projectKey := extractProjectKeyFromIssueKey(issueKey)
+
+	// Handle "none" or "backlog" to move issue to backlog
+	if strings.EqualFold(sprint, "none") || strings.EqualFold(sprint, "backlog") {
+		moveRequest := swagger_software.NewMoveIssuesToBacklogRequest()
+		moveRequest.SetIssues([]string{issueKey})
+
+		_, err := softwareClient.BacklogAPI.MoveIssuesToBacklog(softwareCtx).
+			MoveIssuesToBacklogRequest(*moveRequest).
+			Execute()
+		if err != nil {
+			return fmt.Errorf("failed to move issue to backlog: %w", err)
+		}
+
+		fmt.Printf("Issue %s moved to backlog\n", issueKey)
+		return nil
+	}
+
+	// Try to parse sprint as ID first
+	sprintId, err := strconv.ParseInt(sprint, 10, 64)
+	if err != nil {
+		// Not a number, try to look up sprint by name
+		id, err := lookupSprintByName(projectKey, sprint)
+		if err != nil {
+			return fmt.Errorf("failed to resolve sprint: %w", err)
+		}
+		sprintId = int64(id)
+	}
+
+	// Move issue to the sprint
+	moveRequest := swagger_software.NewMoveIssuesToBacklogForBoardRequest()
+	moveRequest.SetIssues([]string{issueKey})
+
+	_, err = softwareClient.SprintAPI.MoveIssuesToSprintAndRank(softwareCtx, sprintId).
+		MoveIssuesToBacklogForBoardRequest(*moveRequest).
+		Execute()
+	if err != nil {
+		return fmt.Errorf("failed to move issue to sprint: %w", err)
+	}
+
+	fmt.Printf("Issue %s moved to sprint %d\n", issueKey, sprintId)
+	return nil
 }
