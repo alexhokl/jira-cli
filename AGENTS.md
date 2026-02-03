@@ -136,6 +136,9 @@ jira-cli/
 └── swagger/             # Auto-generated Jira API client (DO NOT EDIT)
 ```
 
+Directory `./swagger/` and `./swagger_software/` should not be modified manually
+as it is generated code using Swagger definitions.
+
 ### Configuration
 
 The application reads configuration from `$HOME/.jira-cli.yml`:
