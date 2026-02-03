@@ -420,3 +420,46 @@ func getSprintsForBoard(client *swagger_software.APIClient, ctx context.Context,
 
 	return allSprints, nil
 }
+
+// newADFDocument creates an Atlassian Document Format (ADF) document from plain text.
+// ADF is the format used by Jira Cloud for rich text fields like description and comments.
+func newADFDocument(text string) map[string]any {
+	return map[string]any{
+		"type":    "doc",
+		"version": 1,
+		"content": []map[string]any{
+			{
+				"type": "paragraph",
+				"content": []map[string]any{
+					{
+						"type": "text",
+						"text": text,
+					},
+				},
+			},
+		},
+	}
+}
+
+// extractProjectKeyFromIssueKey extracts the project key from an issue key.
+// For example, "PROJ-123" returns "PROJ", "MYPROJECT-456" returns "MYPROJECT".
+// If no dash is found, the entire issue key is returned.
+func extractProjectKeyFromIssueKey(issueKey string) string {
+	if idx := strings.LastIndex(issueKey, "-"); idx != -1 {
+		return issueKey[:idx]
+	}
+	return issueKey
+}
+
+// filterBoardsByType filters boards by the specified type.
+// This is a workaround for the swagger-generated code which incorrectly serializes
+// the type parameter as type[type]=value instead of type=value.
+func filterBoardsByType(boards []swagger_software.GetAllBoards200ResponseValuesInner, boardType string) []swagger_software.GetAllBoards200ResponseValuesInner {
+	var filtered []swagger_software.GetAllBoards200ResponseValuesInner
+	for _, board := range boards {
+		if board.GetType() == boardType {
+			filtered = append(filtered, board)
+		}
+	}
+	return filtered
+}

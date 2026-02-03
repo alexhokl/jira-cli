@@ -36,18 +36,7 @@ func init() {
 	flags.BoolVar(&listBoardsOpts.orderByName, "order-by-name", false, "Order results by name")
 }
 
-// filterBoardsByType filters boards by the specified type.
-// This is a workaround for the swagger-generated code which incorrectly serializes
-// the type parameter as type[type]=value instead of type=value.
-func filterBoardsByType(boards []swagger_software.GetAllBoards200ResponseValuesInner, boardType string) []swagger_software.GetAllBoards200ResponseValuesInner {
-	var filtered []swagger_software.GetAllBoards200ResponseValuesInner
-	for _, board := range boards {
-		if board.GetType() == boardType {
-			filtered = append(filtered, board)
-		}
-	}
-	return filtered
-}
+// Note: filterBoardsByType is defined in helper.go
 
 func runListBoards(_ *cobra.Command, _ []string) error {
 	client := newSoftwareClient()

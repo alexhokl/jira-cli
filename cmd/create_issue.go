@@ -198,21 +198,4 @@ func runCreateIssue(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-// newADFDocument creates an Atlassian Document Format (ADF) document from plain text
-func newADFDocument(text string) map[string]any {
-	return map[string]any{
-		"type":    "doc",
-		"version": 1,
-		"content": []map[string]any{
-			{
-				"type": "paragraph",
-				"content": []map[string]any{
-					{
-						"type": "text",
-						"text": text,
-					},
-				},
-			},
-		},
-	}
-}
+// Note: newADFDocument is defined in helper.go

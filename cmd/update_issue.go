@@ -699,14 +699,7 @@ func parseCommaSeparatedValues(value string) []string {
 	return result
 }
 
-// extractProjectKeyFromIssueKey extracts the project key from an issue key
-// e.g., "PROJ-123" -> "PROJ"
-func extractProjectKeyFromIssueKey(issueKey string) string {
-	if idx := strings.LastIndex(issueKey, "-"); idx != -1 {
-		return issueKey[:idx]
-	}
-	return issueKey
-}
+// Note: extractProjectKeyFromIssueKey is defined in helper.go
 
 // lookupOptionId looks up an option's ID from allowed values by matching the value name
 // Returns the ID if found, or empty string if not found
