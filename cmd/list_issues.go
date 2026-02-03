@@ -26,6 +26,7 @@ type listIssuesOptions struct {
 	createdBefore string
 	updatedAfter  string
 	updatedBefore string
+	customFields  []string
 	orderBy       string
 	maxResults    int32
 }
@@ -57,7 +58,11 @@ Examples:
   jira-cli list issues --project MYPROJ --created-after -7d
 
   # List high priority bugs
-  jira-cli list issues --project MYPROJ --type Bug --priority High`,
+  jira-cli list issues --project MYPROJ --type Bug --priority High
+
+  # List issues with a custom field value
+  jira-cli list issues --project MYPROJ --custom-field "Team=Platform"
+  jira-cli list issues --project MYPROJ --custom-field "cf[10001]=value"`,
 	RunE: runListIssues,
 }
 
@@ -80,6 +85,7 @@ func init() {
 	flags.StringVar(&listIssuesOpts.createdBefore, "created-before", "", "Filter by created date (e.g., '2024-12-31', '-1d')")
 	flags.StringVar(&listIssuesOpts.updatedAfter, "updated-after", "", "Filter by updated date (e.g., '2024-01-01', '-7d')")
 	flags.StringVar(&listIssuesOpts.updatedBefore, "updated-before", "", "Filter by updated date (e.g., '2024-12-31', '-1d')")
+	flags.StringArrayVar(&listIssuesOpts.customFields, "custom-field", nil, "Custom field in format 'name=value' (can be specified multiple times)")
 	flags.StringVarP(&listIssuesOpts.orderBy, "order-by", "o", "", "Order by field (e.g., 'created DESC', 'priority ASC')")
 	flags.Int32VarP(&listIssuesOpts.maxResults, "max-results", "m", 0, "Maximum number of results to return (0 for all)")
 }
@@ -90,7 +96,11 @@ func runListIssues(_ *cobra.Command, _ []string) error {
 
 	jql := listIssuesOpts.jql
 	if jql == "" {
-		jql = buildJQL()
+		var err error
+		jql, err = buildJQL()
+		if err != nil {
+			return err
+		}
 	}
 
 	if jql == "" {
@@ -146,7 +156,7 @@ func runListIssues(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func buildJQL() string {
+func buildJQL() (string, error) {
 	var conditions []string
 
 	if listIssuesOpts.project != "" {
@@ -225,6 +235,20 @@ func buildJQL() string {
 		conditions = append(conditions, fmt.Sprintf("updated <= %s", quoteJQLValue(listIssuesOpts.updatedBefore)))
 	}
 
+	for _, cf := range listIssuesOpts.customFields {
+		eqIdx := strings.Index(cf, "=")
+		if eqIdx == -1 {
+			return "", fmt.Errorf("invalid custom field format %q: expected 'name=value'", cf)
+		}
+		fieldName := strings.TrimSpace(cf[:eqIdx])
+		fieldValue := cf[eqIdx+1:]
+		// Quote field name if it contains spaces
+		if strings.Contains(fieldName, " ") {
+			fieldName = fmt.Sprintf("\"%s\"", fieldName)
+		}
+		conditions = append(conditions, fmt.Sprintf("%s = %s", fieldName, quoteJQLValue(fieldValue)))
+	}
+
 	jql := strings.Join(conditions, " AND ")
 
 	if listIssuesOpts.orderBy != "" {
@@ -233,7 +257,7 @@ func buildJQL() string {
 		jql = jql + " ORDER BY status DESC"
 	}
 
-	return jql
+	return jql, nil
 }
 
 func quoteJQLValue(value string) string {

@@ -763,14 +763,118 @@ func TestBuildJQL(t *testing.T) {
 			},
 			expected: `project = MYPROJ AND fixVersion = "2024/Q1" ORDER BY status DESC`,
 		},
+		// Test cases for custom field filter
+		{
+			name: "single custom field",
+			opts: listIssuesOptions{
+				project:      "MYPROJ",
+				customFields: []string{"Team=Platform"},
+			},
+			expected: `project = MYPROJ AND Team = Platform ORDER BY status DESC`,
+		},
+		{
+			name: "custom field with value containing space",
+			opts: listIssuesOptions{
+				project:      "MYPROJ",
+				customFields: []string{"Team=Platform Engineering"},
+			},
+			expected: `project = MYPROJ AND Team = "Platform Engineering" ORDER BY status DESC`,
+		},
+		{
+			name: "custom field with field name containing space",
+			opts: listIssuesOptions{
+				project:      "MYPROJ",
+				customFields: []string{"Custom Team=Platform"},
+			},
+			expected: `project = MYPROJ AND "Custom Team" = Platform ORDER BY status DESC`,
+		},
+		{
+			name: "custom field using cf notation",
+			opts: listIssuesOptions{
+				project:      "MYPROJ",
+				customFields: []string{"cf[10001]=value"},
+			},
+			expected: `project = MYPROJ AND cf[10001] = value ORDER BY status DESC`,
+		},
+		{
+			name: "multiple custom fields",
+			opts: listIssuesOptions{
+				project:      "MYPROJ",
+				customFields: []string{"Team=Platform", "Environment=Production"},
+			},
+			expected: `project = MYPROJ AND Team = Platform AND Environment = Production ORDER BY status DESC`,
+		},
+		{
+			name: "custom field with equals in value",
+			opts: listIssuesOptions{
+				project:      "MYPROJ",
+				customFields: []string{"Formula=a=b"},
+			},
+			expected: `project = MYPROJ AND Formula = "a=b" ORDER BY status DESC`,
+		},
+		{
+			name: "empty custom fields slice",
+			opts: listIssuesOptions{
+				project:      "MYPROJ",
+				customFields: []string{},
+			},
+			expected: "project = MYPROJ ORDER BY status DESC",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			listIssuesOpts = tt.opts
-			result := buildJQL()
+			result, err := buildJQL()
+			if err != nil {
+				t.Errorf("buildJQL() unexpected error: %v", err)
+				return
+			}
 			if result != tt.expected {
 				t.Errorf("buildJQL() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestBuildJQLCustomFieldError(t *testing.T) {
+	// Save original options and restore after test
+	originalOpts := listIssuesOpts
+	defer func() { listIssuesOpts = originalOpts }()
+
+	tests := []struct {
+		name        string
+		opts        listIssuesOptions
+		expectedErr string
+	}{
+		{
+			name: "invalid custom field format without equals",
+			opts: listIssuesOptions{
+				project:      "MYPROJ",
+				customFields: []string{"InvalidFormat"},
+			},
+			expectedErr: "invalid custom field format \"InvalidFormat\": expected 'name=value'",
+		},
+		{
+			name: "one valid and one invalid custom field",
+			opts: listIssuesOptions{
+				project:      "MYPROJ",
+				customFields: []string{"Team=Platform", "InvalidFormat"},
+			},
+			expectedErr: "invalid custom field format \"InvalidFormat\": expected 'name=value'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			listIssuesOpts = tt.opts
+			_, err := buildJQL()
+			if err == nil {
+				t.Errorf("buildJQL() expected error but got nil")
+				return
+			}
+			if err.Error() != tt.expectedErr {
+				t.Errorf("buildJQL() error = %q, want %q", err.Error(), tt.expectedErr)
 			}
 		})
 	}
