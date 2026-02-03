@@ -29,6 +29,7 @@ type listIssuesOptions struct {
 	customFields  []string
 	orderBy       string
 	maxResults    int32
+	idOnly        bool
 }
 
 var listIssuesOpts = listIssuesOptions{}
@@ -62,7 +63,10 @@ Examples:
 
   # List issues with a custom field value
   jira-cli list issues --project MYPROJ --custom-field "Team=Platform"
-  jira-cli list issues --project MYPROJ --custom-field "cf[10001]=value"`,
+  jira-cli list issues --project MYPROJ --custom-field "cf[10001]=value"
+
+  # List only issue IDs (useful for scripting)
+  jira-cli list issues --project MYPROJ --id-only`,
 	RunE: runListIssues,
 }
 
@@ -88,6 +92,7 @@ func init() {
 	flags.StringArrayVar(&listIssuesOpts.customFields, "custom-field", nil, "Custom field in format 'name=value' (can be specified multiple times)")
 	flags.StringVarP(&listIssuesOpts.orderBy, "order-by", "o", "", "Order by field (e.g., 'created DESC', 'priority ASC')")
 	flags.Int32VarP(&listIssuesOpts.maxResults, "max-results", "m", 0, "Maximum number of results to return (0 for all)")
+	flags.BoolVar(&listIssuesOpts.idOnly, "id-only", false, "Show only issue IDs (useful for scripting)")
 }
 
 func runListIssues(_ *cobra.Command, _ []string) error {
@@ -152,7 +157,13 @@ func runListIssues(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	printIssues(allIssues)
+	if listIssuesOpts.idOnly {
+		for _, issue := range allIssues {
+			fmt.Println(issue.GetKey())
+		}
+	} else {
+		printIssues(allIssues)
+	}
 	return nil
 }
 
