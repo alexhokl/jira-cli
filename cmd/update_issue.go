@@ -26,6 +26,7 @@ type updateIssueOptions struct {
 	components      string
 	dueDate         string
 	sprint          string
+	transition      string
 	noNotify        bool
 	linkIssue       string
 	linkType        string
@@ -37,10 +38,7 @@ var updateIssueOpts = updateIssueOptions{}
 var updateIssueCmd = &cobra.Command{
 	Use:   "issue",
 	Short: "Update an issue",
-	Long: `Update an issue's fields.
-
-Note: Issue transitions (status changes) are not supported by this command.
-Use the transition command to change issue status.
+	Long: `Update an issue's fields or transition its status.
 
 Examples:
   # Update issue summary
@@ -91,7 +89,15 @@ Examples:
   jira-cli update issue --id PROJ-123 --sprint none
 
   # Clear a custom field value
-  jira-cli update issue --id PROJ-123 --custom-field "Team="`,
+  jira-cli update issue --id PROJ-123 --custom-field "Team="
+
+  # Transition issue status (by name or ID)
+  # Use 'jira-cli list issue-transitions --id PROJ-123' to see available transitions
+  jira-cli update issue --id PROJ-123 --transition "In Progress"
+  jira-cli update issue --id PROJ-123 --transition 21
+
+  # Transition and update fields together
+  jira-cli update issue --id PROJ-123 --transition "In Progress" --assignee me`,
 	RunE: runUpdateIssue,
 }
 
@@ -110,6 +116,7 @@ func init() {
 	flags.StringVarP(&updateIssueOpts.components, "components", "c", "", "Comma-separated component names (replaces existing)")
 	flags.StringVar(&updateIssueOpts.dueDate, "due-date", "", "Due date (format: 2006-01-02, use 'none' to clear)")
 	flags.StringVar(&updateIssueOpts.sprint, "sprint", "", "Sprint ID or name (use 'none' to move to backlog)")
+	flags.StringVarP(&updateIssueOpts.transition, "transition", "t", "", "Transition name or ID to change issue status (use 'jira-cli list issue-transitions' to see available transitions)")
 	flags.BoolVar(&updateIssueOpts.noNotify, "no-notify", false, "Don't send notification emails")
 	flags.StringVar(&updateIssueOpts.linkIssue, "link-issue", "", "Issue key to link to (e.g., PROJ-456)")
 	flags.StringVar(&updateIssueOpts.linkType, "link-type", "", "Link type name (use 'jira-cli list link-types' to see available types)")
@@ -130,6 +137,7 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		updateIssueOpts.components == "" &&
 		updateIssueOpts.dueDate == "" &&
 		updateIssueOpts.sprint == "" &&
+		updateIssueOpts.transition == "" &&
 		updateIssueOpts.linkIssue == "" &&
 		len(updateIssueOpts.customFields) == 0 {
 		return fmt.Errorf("at least one field must be specified to update")
@@ -358,6 +366,13 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 	// Handle sprint update if specified
 	if updateIssueOpts.sprint != "" {
 		if err := updateIssueSprint(updateIssueOpts.issueKey, updateIssueOpts.sprint); err != nil {
+			return err
+		}
+	}
+
+	// Handle transition if specified
+	if updateIssueOpts.transition != "" {
+		if err := transitionIssue(client, ctx, updateIssueOpts.issueKey, updateIssueOpts.transition); err != nil {
 			return err
 		}
 	}
@@ -807,5 +822,62 @@ func updateIssueSprint(issueKey, sprint string) error {
 	}
 
 	fmt.Printf("Issue %s moved to sprint %d\n", issueKey, sprintId)
+	return nil
+}
+
+// transitionIssue transitions an issue to a new status
+func transitionIssue(client *swagger.APIClient, ctx context.Context, issueKey, transition string) error {
+	// Get available transitions for the issue
+	result, _, err := client.IssuesAPI.GetTransitions(ctx, issueKey).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to get available transitions: %w", err)
+	}
+
+	transitions := result.GetTransitions()
+	if len(transitions) == 0 {
+		return fmt.Errorf("no transitions available for issue %s", issueKey)
+	}
+
+	// Find matching transition by ID or name (case-insensitive)
+	var matchedTransition *swagger.IssueTransition
+	for i, t := range transitions {
+		if t.GetId() == transition || strings.EqualFold(t.GetName(), transition) {
+			matchedTransition = &transitions[i]
+			break
+		}
+	}
+
+	if matchedTransition == nil {
+		// Build list of available transitions for error message
+		available := make([]string, len(transitions))
+		for i, t := range transitions {
+			available[i] = fmt.Sprintf("%s (ID: %s)", t.GetName(), t.GetId())
+		}
+		return fmt.Errorf("transition %q not found; available transitions: %s", transition, strings.Join(available, ", "))
+	}
+
+	// Execute the transition
+	transitionRequest := swagger.NewIssueTransition()
+	transitionRequest.SetId(matchedTransition.GetId())
+
+	issueUpdateDetails := swagger.NewIssueUpdateDetails()
+	issueUpdateDetails.SetTransition(*transitionRequest)
+
+	_, _, err = client.IssuesAPI.DoTransition(ctx, issueKey).
+		IssueUpdateDetails(*issueUpdateDetails).
+		Execute()
+	if err != nil {
+		var openAPIErr *swagger.GenericOpenAPIError
+		if errors.As(err, &openAPIErr) {
+			body := string(openAPIErr.Body())
+			if body != "" {
+				return fmt.Errorf("failed to transition issue: %s\n\n%s", err, body)
+			}
+		}
+		return fmt.Errorf("failed to transition issue: %w", err)
+	}
+
+	toStatus := matchedTransition.GetTo()
+	fmt.Printf("Issue %s transitioned to '%s'\n", issueKey, toStatus.GetName())
 	return nil
 }
