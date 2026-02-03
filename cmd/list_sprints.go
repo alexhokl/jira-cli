@@ -15,7 +15,7 @@ import (
 
 type listSprintsOptions struct {
 	boardId int64
-	state   string
+	state   []string
 }
 
 var listSprintsOpts = listSprintsOptions{}
@@ -31,7 +31,7 @@ func init() {
 
 	flags := listSprintsCmd.Flags()
 	flags.Int64VarP(&listSprintsOpts.boardId, "board-id", "b", 0, "Board ID (required)")
-	flags.StringVarP(&listSprintsOpts.state, "state", "s", "", "Filter by sprint state (future, active, closed)")
+	flags.StringSliceVarP(&listSprintsOpts.state, "state", "s", nil, "Filter by sprint state (future, active, closed); can be specified multiple times")
 
 	listSprintsCmd.MarkFlagRequired("board-id")
 }
@@ -53,10 +53,8 @@ func runListSprints(_ *cobra.Command, _ []string) error {
 
 	// Build a set of allowed states for filtering
 	stateFilter := make(map[string]bool)
-	if listSprintsOpts.state != "" {
-		for _, s := range strings.Split(listSprintsOpts.state, ",") {
-			stateFilter[strings.TrimSpace(s)] = true
-		}
+	for _, s := range listSprintsOpts.state {
+		stateFilter[strings.TrimSpace(s)] = true
 	}
 
 	for {

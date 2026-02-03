@@ -169,57 +169,63 @@ func TestSprintStateFiltering(t *testing.T) {
 	// Test the state filter logic used in runListSprints
 	tests := []struct {
 		name        string
-		stateFilter string
+		stateFilter []string
 		sprintState string
 		shouldMatch bool
 	}{
 		{
 			name:        "empty filter matches all",
-			stateFilter: "",
+			stateFilter: nil,
 			sprintState: "active",
 			shouldMatch: true,
 		},
 		{
 			name:        "active filter matches active",
-			stateFilter: "active",
+			stateFilter: []string{"active"},
 			sprintState: "active",
 			shouldMatch: true,
 		},
 		{
 			name:        "active filter does not match closed",
-			stateFilter: "active",
+			stateFilter: []string{"active"},
 			sprintState: "closed",
 			shouldMatch: false,
 		},
 		{
 			name:        "closed filter matches closed",
-			stateFilter: "closed",
+			stateFilter: []string{"closed"},
 			sprintState: "closed",
 			shouldMatch: true,
 		},
 		{
 			name:        "future filter matches future",
-			stateFilter: "future",
+			stateFilter: []string{"future"},
 			sprintState: "future",
 			shouldMatch: true,
 		},
 		{
-			name:        "comma-separated filter matches first",
-			stateFilter: "active,closed",
+			name:        "multiple state options matches first",
+			stateFilter: []string{"active", "closed"},
 			sprintState: "active",
 			shouldMatch: true,
 		},
 		{
-			name:        "comma-separated filter matches second",
-			stateFilter: "active,closed",
+			name:        "multiple state options matches second",
+			stateFilter: []string{"active", "closed"},
 			sprintState: "closed",
 			shouldMatch: true,
 		},
 		{
-			name:        "comma-separated filter does not match other",
-			stateFilter: "active,closed",
+			name:        "multiple state options does not match other",
+			stateFilter: []string{"active", "closed"},
 			sprintState: "future",
 			shouldMatch: false,
+		},
+		{
+			name:        "all three states matches any",
+			stateFilter: []string{"active", "closed", "future"},
+			sprintState: "future",
+			shouldMatch: true,
 		},
 	}
 
@@ -227,17 +233,15 @@ func TestSprintStateFiltering(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Build state filter map (same logic as in runListSprints)
 			stateFilterMap := make(map[string]bool)
-			if tt.stateFilter != "" {
-				for _, s := range strings.Split(tt.stateFilter, ",") {
-					stateFilterMap[strings.TrimSpace(s)] = true
-				}
+			for _, s := range tt.stateFilter {
+				stateFilterMap[strings.TrimSpace(s)] = true
 			}
 
 			// Check if sprint matches filter
 			matches := len(stateFilterMap) == 0 || stateFilterMap[tt.sprintState]
 
 			if matches != tt.shouldMatch {
-				t.Errorf("state filter %q with sprint state %q: got match=%v, want %v",
+				t.Errorf("state filter %v with sprint state %q: got match=%v, want %v",
 					tt.stateFilter, tt.sprintState, matches, tt.shouldMatch)
 			}
 		})
