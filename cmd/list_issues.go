@@ -121,7 +121,7 @@ func runListIssues(_ *cobra.Command, _ []string) error {
 		request := client.IssueSearchAPI.SearchAndReconsileIssuesUsingJql(ctx).
 			Jql(jql).
 			MaxResults(pageSize).
-			Fields([]string{"summary", "status", "assignee", "priority", "issuetype", "labels", "created", "updated"})
+			Fields([]string{"summary", "status", "assignee", "reporter", "priority", "issuetype", "labels", "created", "updated"})
 
 		if nextPageToken != "" {
 			request = request.NextPageToken(nextPageToken)
@@ -321,6 +321,15 @@ func printIssues(issues []swagger.IssueBean) {
 			}
 		}
 
+		reporter := ""
+		if reporterObj, ok := fields["reporter"]; ok && reporterObj != nil {
+			if reporterMap, ok := reporterObj.(map[string]interface{}); ok {
+				if displayName, ok := reporterMap["displayName"].(string); ok {
+					reporter = displayName
+				}
+			}
+		}
+
 		priority := ""
 		if priorityObj, ok := fields["priority"]; ok && priorityObj != nil {
 			if priorityMap, ok := priorityObj.(map[string]interface{}); ok {
@@ -361,7 +370,7 @@ func printIssues(issues []swagger.IssueBean) {
 			priorityColored = green(priority)
 		}
 
-		// Format output: KEY [Type] Summary (Status) - Assignee [Priority]
+		// Format output: KEY [Type] Summary (Status) - Assignee <- Reporter [Priority]
 		output := fmt.Sprintf("%s", yellow(key))
 		if issueType != "" {
 			output += fmt.Sprintf(" [%s]", magenta(issueType))
@@ -371,6 +380,9 @@ func printIssues(issues []swagger.IssueBean) {
 			output += fmt.Sprintf(" (%s)", statusColored)
 		}
 		output += fmt.Sprintf(" - %s", cyan(assignee))
+		if reporter != "" {
+			output += fmt.Sprintf(" <- %s", cyan(reporter))
+		}
 		if priority != "" {
 			output += fmt.Sprintf(" [%s]", priorityColored)
 		}
