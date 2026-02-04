@@ -56,22 +56,7 @@ func runCreateComment(_ *cobra.Command, _ []string) error {
 }
 
 func newComment(comment string) *swagger.Comment {
-	body := map[string]interface{}{
-		"type":    "doc",
-		"version": 1,
-		"content": []map[string]interface{}{
-			{
-				"type": "paragraph",
-				"content": []map[string]interface{}{
-					{
-						"type": "text",
-						"text": comment,
-					},
-				},
-			},
-		},
-	}
 	return &swagger.Comment{
-		Body: body,
+		Body: convertMarkdownToADF(comment),
 	}
 }

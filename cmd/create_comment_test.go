@@ -7,28 +7,58 @@ import (
 
 func TestNewComment(t *testing.T) {
 	tests := []struct {
-		name    string
-		comment string
+		name           string
+		comment        string
+		expectedBlocks int
+		firstBlockType string
 	}{
 		{
-			name:    "simple comment",
-			comment: "This is a test comment",
+			name:           "simple comment",
+			comment:        "This is a test comment",
+			expectedBlocks: 1,
+			firstBlockType: "paragraph",
 		},
 		{
-			name:    "comment with special characters",
-			comment: "Comment with 'quotes' and \"double quotes\"",
+			name:           "comment with special characters",
+			comment:        "Comment with 'quotes' and \"double quotes\"",
+			expectedBlocks: 1,
+			firstBlockType: "paragraph",
 		},
 		{
-			name:    "multiline comment",
-			comment: "Line 1\nLine 2\nLine 3",
+			name:           "multiline comment",
+			comment:        "Line 1\nLine 2\nLine 3",
+			expectedBlocks: 3,
+			firstBlockType: "paragraph",
 		},
 		{
-			name:    "empty comment",
-			comment: "",
+			name:           "empty comment",
+			comment:        "",
+			expectedBlocks: 0,
+			firstBlockType: "",
 		},
 		{
-			name:    "comment with unicode",
-			comment: "Test with unicode: 日本語 and emoji 🎉",
+			name:           "comment with unicode",
+			comment:        "Test with unicode: 日本語 and emoji 🎉",
+			expectedBlocks: 1,
+			firstBlockType: "paragraph",
+		},
+		{
+			name:           "comment with markdown heading",
+			comment:        "# Heading",
+			expectedBlocks: 1,
+			firstBlockType: "heading",
+		},
+		{
+			name:           "comment with code block",
+			comment:        "```\ncode\n```",
+			expectedBlocks: 1,
+			firstBlockType: "codeBlock",
+		},
+		{
+			name:           "comment with bullet list",
+			comment:        "- item 1\n- item 2",
+			expectedBlocks: 1,
+			firstBlockType: "bulletList",
 		},
 	}
 
@@ -44,9 +74,9 @@ func TestNewComment(t *testing.T) {
 				t.Fatal("newComment().Body is nil")
 			}
 
-			body, ok := result.Body.(map[string]interface{})
+			body, ok := result.Body.(map[string]any)
 			if !ok {
-				t.Fatalf("Body is not map[string]interface{}, got %T", result.Body)
+				t.Fatalf("Body is not map[string]any, got %T", result.Body)
 			}
 
 			// Check document type
@@ -60,36 +90,21 @@ func TestNewComment(t *testing.T) {
 			}
 
 			// Check content structure
-			content, ok := body["content"].([]map[string]interface{})
+			content, ok := body["content"].([]map[string]any)
 			if !ok {
-				t.Fatalf("Body content is not []map[string]interface{}, got %T", body["content"])
+				t.Fatalf("Body content is not []map[string]any, got %T", body["content"])
 			}
 
-			if len(content) != 1 {
-				t.Fatalf("Expected 1 content block, got %d", len(content))
+			if len(content) != tt.expectedBlocks {
+				t.Fatalf("Expected %d content block(s), got %d", tt.expectedBlocks, len(content))
 			}
 
-			paragraph := content[0]
-			if paragraph["type"] != "paragraph" {
-				t.Errorf("Content block type = %v, want 'paragraph'", paragraph["type"])
-			}
-
-			paragraphContent, ok := paragraph["content"].([]map[string]interface{})
-			if !ok {
-				t.Fatalf("Paragraph content is not []map[string]interface{}, got %T", paragraph["content"])
-			}
-
-			if len(paragraphContent) != 1 {
-				t.Fatalf("Expected 1 text node, got %d", len(paragraphContent))
-			}
-
-			textNode := paragraphContent[0]
-			if textNode["type"] != "text" {
-				t.Errorf("Text node type = %v, want 'text'", textNode["type"])
-			}
-
-			if textNode["text"] != tt.comment {
-				t.Errorf("Text node text = %v, want %v", textNode["text"], tt.comment)
+			// Check first block type if we expect content
+			if tt.expectedBlocks > 0 {
+				firstBlock := content[0]
+				if blockType, ok := firstBlock["type"].(string); !ok || blockType != tt.firstBlockType {
+					t.Errorf("First content block type = %v, want '%s'", firstBlock["type"], tt.firstBlockType)
+				}
 			}
 		})
 	}
