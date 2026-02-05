@@ -15,6 +15,7 @@ type getIssueOptions struct {
 	id               string
 	showCustomFields bool
 	descriptionOnly  bool
+	noImages         bool
 }
 
 var getIssueOpts = getIssueOptions{}
@@ -26,14 +27,20 @@ var getIssueCmd = &cobra.Command{
 	Long: `Get details of a specific issue.
 
 Examples:
-  # Get issue details
+  # Get issue details (images displayed by default in supported terminals)
   jira-cli get issue -i PROJ-123
 
   # Get issue details including custom fields
   jira-cli get issue -i PROJ-123 --show-custom-fields
 
   # Get only the description in markdown format
-  jira-cli get issue -i PROJ-123 --description-only`,
+  jira-cli get issue -i PROJ-123 --description-only
+
+  # Get issue without inline images
+  jira-cli get issue -i PROJ-123 --no-images
+
+Note: Images are displayed inline by default in terminals that support
+the Kitty graphics protocol (Ghostty, Kitty, WezTerm).`,
 	RunE: runGetIssue,
 }
 
@@ -44,23 +51,43 @@ func init() {
 	flags.StringVarP(&getIssueOpts.id, "id", "i", "", "Issue ID")
 	flags.BoolVarP(&getIssueOpts.showCustomFields, "show-custom-fields", "c", false, "Show custom field values")
 	flags.BoolVar(&getIssueOpts.descriptionOnly, "description-only", false, "Output only the description in markdown format")
+	flags.BoolVar(&getIssueOpts.noImages, "no-images", false, "Do not display images inline")
 
 	getIssueCmd.MarkFlagRequired("id")
 }
 
 func runGetIssue(_ *cobra.Command, _ []string) error {
 	client := newClient()
-	issue, _, err := client.IssuesAPI.GetIssue(getAuthContext(), getIssueOpts.id).Execute()
+	ctx := getAuthContext()
+	issue, _, err := client.IssuesAPI.GetIssue(ctx, getIssueOpts.id).Execute()
 	if err != nil {
 		return wrapAPIError(err)
+	}
+
+	// Check if we should show images (default: yes, unless --no-images or terminal doesn't support it)
+	showImages := !getIssueOpts.noImages && supportsKittyGraphics()
+
+	// Build attachment maps if showing images
+	var attMaps *attachmentMaps
+	if showImages {
+		attMaps, err = buildAttachmentMaps(client, ctx, getIssueOpts.id)
+		if err != nil {
+			// Non-fatal: just warn and continue without images
+			fmt.Printf("Warning: could not fetch attachments: %v\n\n", err)
+			showImages = false
+		}
 	}
 
 	// Handle description-only mode
 	if getIssueOpts.descriptionOnly {
 		descriptionObject := issue.Fields["description"]
 		if descriptionObject != nil {
-			markdown := convertADFToMarkdown(descriptionObject)
-			fmt.Print(markdown)
+			if showImages && attMaps != nil {
+				printADFWithImages(descriptionObject, attMaps)
+			} else {
+				markdown := convertADFToMarkdown(descriptionObject)
+				fmt.Print(markdown)
+			}
 		}
 		return nil
 	}
@@ -82,9 +109,14 @@ func runGetIssue(_ *cobra.Command, _ []string) error {
 
 	descriptionObject := issue.Fields["description"]
 	if descriptionObject != nil {
-		description := convertADFToMarkdown(descriptionObject)
-		if description != "" {
-			fmt.Printf("\n%s", description)
+		if showImages && attMaps != nil {
+			fmt.Println()
+			printADFWithImages(descriptionObject, attMaps)
+		} else {
+			description := convertADFToMarkdown(descriptionObject)
+			if description != "" {
+				fmt.Printf("\n%s", description)
+			}
 		}
 	}
 
