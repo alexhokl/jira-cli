@@ -152,10 +152,11 @@ func TestListCommentsAPI_WithADFBody(t *testing.T) {
 		t.Fatalf("expected 1 comment, got %d", len(comments))
 	}
 
-	// Test extracting text from the ADF body
-	body := extractTextFromADF(comments[0].Body)
-	if body != "This is a comment with ADF format" {
-		t.Errorf("expected body text 'This is a comment with ADF format', got %q", body)
+	// Test converting ADF body to markdown
+	body := convertADFToMarkdown(comments[0].Body)
+	expected := "This is a comment with ADF format\n"
+	if body != expected {
+		t.Errorf("expected body text %q, got %q", expected, body)
 	}
 }
 

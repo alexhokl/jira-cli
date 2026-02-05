@@ -71,7 +71,7 @@ func printComment(comment *swagger.Comment, yellow, cyan func(a ...interface{}) 
 
 	fmt.Printf("%s - %s\n", yellow(authorName), cyan(createdDate))
 
-	body := extractTextFromADF(comment.Body)
+	body := convertADFToMarkdown(comment.Body)
 	if body != "" {
 		fmt.Printf("%s\n", body)
 	}
