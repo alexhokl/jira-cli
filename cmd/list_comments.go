@@ -68,8 +68,12 @@ func printComment(comment *swagger.Comment, yellow, cyan func(a ...interface{}) 
 	if comment.HasCreated() {
 		createdDate = comment.GetCreated().Format("2006-01-02 15:04:05")
 	}
+	commentID := ""
+	if comment.HasId() {
+		commentID = comment.GetId()
+	}
 
-	fmt.Printf("%s - %s\n", yellow(authorName), cyan(createdDate))
+	fmt.Printf("[%s] %s - %s\n", commentID, yellow(authorName), cyan(createdDate))
 
 	body := convertADFToMarkdown(comment.Body)
 	if body != "" {
