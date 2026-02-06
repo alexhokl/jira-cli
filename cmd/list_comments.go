@@ -351,6 +351,9 @@ func displayMediaElement(mediaMap map[string]any, result *strings.Builder, attMa
 	if err := fetchAndDisplayImage(info.content); err != nil {
 		// Failed to display image, print placeholder
 		result.WriteString(fmt.Sprintf("![%s](media) (failed to load)\n", alt))
+	} else {
+		// Print the image URL below the rendered image
+		fmt.Printf("%s\n", info.content)
 	}
 }
 

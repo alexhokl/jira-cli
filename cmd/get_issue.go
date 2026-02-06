@@ -12,10 +12,9 @@ import (
 )
 
 type getIssueOptions struct {
-	id               string
-	showCustomFields bool
-	descriptionOnly  bool
-	noImages         bool
+	id              string
+	descriptionOnly bool
+	noImages        bool
 }
 
 var getIssueOpts = getIssueOptions{}
@@ -29,9 +28,6 @@ var getIssueCmd = &cobra.Command{
 Examples:
   # Get issue details (images displayed by default in supported terminals)
   jira-cli get issue -i PROJ-123
-
-  # Get issue details including custom fields
-  jira-cli get issue -i PROJ-123 --show-custom-fields
 
   # Get only the description in markdown format
   jira-cli get issue -i PROJ-123 --description-only
@@ -49,7 +45,6 @@ func init() {
 
 	flags := getIssueCmd.Flags()
 	flags.StringVarP(&getIssueOpts.id, "id", "i", "", "Issue ID")
-	flags.BoolVarP(&getIssueOpts.showCustomFields, "show-custom-fields", "c", false, "Show custom field values")
 	flags.BoolVar(&getIssueOpts.descriptionOnly, "description-only", false, "Output only the description in markdown format")
 	flags.BoolVar(&getIssueOpts.noImages, "no-images", false, "Do not display images inline")
 
@@ -107,6 +102,12 @@ func runGetIssue(_ *cobra.Command, _ []string) error {
 	plainSummaryLine := fmt.Sprintf("%s %s", *issue.Key, summary)
 	fmt.Println(strings.Repeat("-", len(plainSummaryLine)))
 
+	// Display status
+	status := extractStatusName(issue.Fields["status"])
+	if status != "" {
+		fmt.Printf("%s %s\n", cyan("Status:"), magenta(status))
+	}
+
 	descriptionObject := issue.Fields["description"]
 	if descriptionObject != nil {
 		if showImages && attMaps != nil {
@@ -142,16 +143,14 @@ func runGetIssue(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	// Display custom fields (if flag is set)
-	if getIssueOpts.showCustomFields {
-		fieldNameMap, err := getFieldNameMap(client, getAuthContext())
-		if err == nil {
-			customFields := extractIssueCustomFields(issue.Fields, fieldNameMap)
-			if len(customFields) > 0 {
-				fmt.Printf("\n%s\n", cyan("Custom Fields:"))
-				for _, cf := range customFields {
-					fmt.Printf("  %s: %s\n", yellow(cf.name), cf.value)
-				}
+	// Display custom fields
+	fieldNameMap, err := getFieldNameMap(client, getAuthContext())
+	if err == nil {
+		customFields := extractIssueCustomFields(issue.Fields, fieldNameMap)
+		if len(customFields) > 0 {
+			fmt.Printf("\n%s\n", cyan("Custom Fields:"))
+			for _, cf := range customFields {
+				fmt.Printf("  %s: %s\n", yellow(cf.name), cf.value)
 			}
 		}
 	}
@@ -214,6 +213,24 @@ func extractLabels(labelsObj any) []string {
 	}
 
 	return labels
+}
+
+// extractStatusName extracts the status name from the status field
+func extractStatusName(statusObj any) string {
+	if statusObj == nil {
+		return ""
+	}
+
+	statusMap, ok := statusObj.(map[string]any)
+	if !ok {
+		return ""
+	}
+
+	if name, ok := statusMap["name"].(string); ok {
+		return name
+	}
+
+	return ""
 }
 
 // extractUserDisplayName extracts the display name from a user field (assignee, reporter, etc.)
