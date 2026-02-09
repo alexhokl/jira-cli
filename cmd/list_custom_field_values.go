@@ -13,8 +13,11 @@ import (
 )
 
 type listCustomFieldValuesOptions struct {
-	project string
-	name    string
+	project      string
+	name         string
+	showDisabled bool
+	idOnly       bool
+	valueOnly    bool
 }
 
 var listCustomFieldValuesOpts = listCustomFieldValuesOptions{}
@@ -41,7 +44,11 @@ func init() {
 	flags := listCustomFieldValuesCmd.Flags()
 	flags.StringVarP(&listCustomFieldValuesOpts.project, "project", "p", "", "Filter by project key")
 	flags.StringVarP(&listCustomFieldValuesOpts.name, "name", "n", "", "Custom field name (required)")
+	flags.BoolVar(&listCustomFieldValuesOpts.showDisabled, "show-disabled", false, "Show disabled values (hidden by default)")
+	flags.BoolVar(&listCustomFieldValuesOpts.idOnly, "id-only", false, "Output only IDs, one per line")
+	flags.BoolVar(&listCustomFieldValuesOpts.valueOnly, "value-only", false, "Output only values, one per line")
 	listCustomFieldValuesCmd.MarkFlagRequired("name")
+	listCustomFieldValuesCmd.MarkFlagsMutuallyExclusive("id-only", "value-only")
 }
 
 func runListCustomFieldValues(_ *cobra.Command, _ []string) error {
@@ -96,24 +103,61 @@ func runListCustomFieldValues(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	// Filter out disabled options unless show-disabled is set
+	var displayOptions []customFieldOptionValue
+	for _, opt := range allOptions {
+		if !opt.disabled || listCustomFieldValuesOpts.showDisabled {
+			displayOptions = append(displayOptions, opt)
+		}
+	}
+
+	if len(displayOptions) == 0 {
+		fmt.Println("No enabled values found for this custom field (use --show-disabled to see disabled values)")
+		return nil
+	}
+
+	// Handle id-only output
+	if listCustomFieldValuesOpts.idOnly {
+		for _, opt := range displayOptions {
+			fmt.Println(opt.id)
+		}
+		return nil
+	}
+
+	// Handle value-only output
+	if listCustomFieldValuesOpts.valueOnly {
+		for _, opt := range displayOptions {
+			fmt.Println(opt.value)
+		}
+		return nil
+	}
+
 	// Display results
 	yellow := color.New(color.FgYellow).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
 	red := color.New(color.FgRed).SprintFunc()
 
 	w := newTableWriter(os.Stdout, 0, 2)
-	w.row(cyan("ID"), cyan("VALUE"), cyan("STATUS"), cyan("CONTEXT"))
+	if listCustomFieldValuesOpts.showDisabled {
+		w.row(cyan("ID"), cyan("VALUE"), cyan("STATUS"), cyan("CONTEXT"))
+	} else {
+		w.row(cyan("ID"), cyan("VALUE"), cyan("CONTEXT"))
+	}
 
-	for _, opt := range allOptions {
-		status := "Active"
-		if opt.disabled {
-			status = red("Disabled")
+	for _, opt := range displayOptions {
+		if listCustomFieldValuesOpts.showDisabled {
+			status := "Active"
+			if opt.disabled {
+				status = red("Disabled")
+			}
+			w.row(opt.id, yellow(opt.value), status, opt.contextName)
+		} else {
+			w.row(opt.id, yellow(opt.value), opt.contextName)
 		}
-		w.row(opt.id, yellow(opt.value), status, opt.contextName)
 	}
 	w.flush()
 
-	fmt.Printf("\nFound %d values\n", len(allOptions))
+	fmt.Printf("\nFound %d values\n", len(displayOptions))
 
 	return nil
 }
