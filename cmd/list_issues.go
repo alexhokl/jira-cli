@@ -40,7 +40,8 @@ var listIssuesCmd = &cobra.Command{
 	Long: `List issues using JQL search.
 
 You can use the --jql flag to specify a raw JQL query, or use the convenience
-flags to build a JQL query. If --jql is specified, the other filter flags are ignored.
+flags to build a JQL query. When --jql is specified, the --project flag can still
+be used to filter results to a specific project.
 
 Examples:
   # List all issues in a project
@@ -54,6 +55,9 @@ Examples:
 
   # List issues using raw JQL
   jira-cli list issues --jql "project = MYPROJ AND status = 'In Progress'"
+
+  # List issues using raw JQL filtered to a specific project
+  jira-cli list issues --project MYPROJ --jql "status = 'In Progress'"
 
   # List issues created in the last 7 days
   jira-cli list issues --project MYPROJ --created-after -7d
@@ -99,8 +103,16 @@ func runListIssues(_ *cobra.Command, _ []string) error {
 	client := newClient()
 	ctx := getAuthContext()
 
-	jql := listIssuesOpts.jql
-	if jql == "" {
+	var jql string
+	if listIssuesOpts.jql != "" {
+		// Start with the raw JQL query
+		jql = listIssuesOpts.jql
+
+		// If project is also specified, prepend it to the JQL
+		if listIssuesOpts.project != "" {
+			jql = fmt.Sprintf("project = %s AND (%s)", quoteJQLValue(listIssuesOpts.project), jql)
+		}
+	} else {
 		var err error
 		jql, err = buildJQL()
 		if err != nil {
