@@ -22,6 +22,7 @@ type createIssueOptions struct {
 	components      string
 	parent          string
 	dueDate         string
+	sprint          string
 	customFields    []string
 }
 
@@ -38,6 +39,10 @@ Examples:
 
   # Create an issue with description from file
   jira-cli create issue -p PROJ -t Bug -s "Bug title" -d description.md
+
+  # Create an issue and add it to a sprint (by ID or name)
+  jira-cli create issue -p PROJ -t Task -s "My task" --sprint 42
+  jira-cli create issue -p PROJ -t Task -s "My task" --sprint "Sprint 5"
 
   # Create an issue with custom fields
   jira-cli create issue -p PROJ -t Story -s "My story" --custom-field "Team=Backend"
@@ -64,6 +69,7 @@ func init() {
 	flags.StringVarP(&createIssueOpts.components, "components", "c", "", "Comma-separated component names")
 	flags.StringVar(&createIssueOpts.parent, "parent", "", "Parent issue key (for subtasks)")
 	flags.StringVar(&createIssueOpts.dueDate, "due-date", "", "Due date (format: 2006-01-02)")
+	flags.StringVar(&createIssueOpts.sprint, "sprint", "", "Sprint ID or name to add the issue to")
 	flags.StringArrayVar(&createIssueOpts.customFields, "custom-field", nil, "Custom field in format 'name=value' (can be specified multiple times)")
 
 	createIssueCmd.MarkFlagRequired("project")
@@ -194,7 +200,16 @@ func runCreateIssue(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	fmt.Printf("Issue created: %s\n", createdIssue.GetKey())
+	issueKey := createdIssue.GetKey()
+	fmt.Printf("Issue created: %s\n", issueKey)
+
+	// Handle sprint assignment if specified
+	if createIssueOpts.sprint != "" {
+		if err := updateIssueSprint(issueKey, createIssueOpts.sprint); err != nil {
+			return fmt.Errorf("issue created but failed to add to sprint: %w", err)
+		}
+	}
+
 	return nil
 }
 
