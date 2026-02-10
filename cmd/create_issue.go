@@ -51,7 +51,10 @@ Examples:
   jira-cli create issue -p PROJ -t Task -s "My task" --custom-field "Team=Backend" --custom-field "Story Points=5"
 
   # Create an issue with a select list custom field
-  jira-cli create issue -p PROJ -t Task -s "My task" --custom-field "Environment=Production"`,
+  jira-cli create issue -p PROJ -t Task -s "My task" --custom-field "Environment=Production"
+
+  # Create an issue with a parent (make this issue a child/subtask of another issue)
+  jira-cli create issue -p PROJ -t Subtask -s "My subtask" --parent PROJ-100`,
 	RunE: runCreateIssue,
 }
 
@@ -67,7 +70,7 @@ func init() {
 	flags.StringVarP(&createIssueOpts.assignee, "assignee", "a", "", "Assignee account ID (use 'me' for yourself)")
 	flags.StringVarP(&createIssueOpts.labels, "labels", "l", "", "Comma-separated labels")
 	flags.StringVarP(&createIssueOpts.components, "components", "c", "", "Comma-separated component names")
-	flags.StringVar(&createIssueOpts.parent, "parent", "", "Parent issue key (for subtasks)")
+	flags.StringVar(&createIssueOpts.parent, "parent", "", "Parent issue key to assign (for subtasks/child issues)")
 	flags.StringVar(&createIssueOpts.dueDate, "due-date", "", "Due date (format: 2006-01-02)")
 	flags.StringVar(&createIssueOpts.sprint, "sprint", "", "Sprint ID or name to add the issue to")
 	flags.StringArrayVar(&createIssueOpts.customFields, "custom-field", nil, "Custom field in format 'name=value' (can be specified multiple times)")
