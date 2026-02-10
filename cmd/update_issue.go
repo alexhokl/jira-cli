@@ -31,6 +31,7 @@ type updateIssueOptions struct {
 	linkIssue       string
 	linkType        string
 	customFields    []string
+	parent          string
 }
 
 var updateIssueOpts = updateIssueOptions{}
@@ -88,6 +89,12 @@ Examples:
   # Move issue to backlog (remove from sprint)
   jira-cli update issue --id PROJ-123 --sprint none
 
+  # Assign a parent issue (make this issue a child/subtask of another issue)
+  jira-cli update issue --id PROJ-123 --parent PROJ-100
+
+  # Remove parent (unassign from parent issue)
+  jira-cli update issue --id PROJ-123 --parent none
+
   # Clear a custom field value
   jira-cli update issue --id PROJ-123 --custom-field "Team="
 
@@ -121,6 +128,7 @@ func init() {
 	flags.StringVar(&updateIssueOpts.linkIssue, "link-issue", "", "Issue key to link to (e.g., PROJ-456)")
 	flags.StringVar(&updateIssueOpts.linkType, "link-type", "", "Link type name (use 'jira-cli list link-types' to see available types)")
 	flags.StringArrayVar(&updateIssueOpts.customFields, "custom-field", nil, "Custom field to update in format 'name=value' (can be specified multiple times)")
+	flags.StringVar(&updateIssueOpts.parent, "parent", "", "Parent issue key to assign (use 'none' to remove parent)")
 
 	updateIssueCmd.MarkFlagRequired("id")
 }
@@ -139,6 +147,7 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		updateIssueOpts.sprint == "" &&
 		updateIssueOpts.transition == "" &&
 		updateIssueOpts.linkIssue == "" &&
+		updateIssueOpts.parent == "" &&
 		len(updateIssueOpts.customFields) == 0 {
 		return fmt.Errorf("at least one field must be specified to update")
 	}
@@ -243,6 +252,19 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 			fields["duedate"] = nil
 		} else {
 			fields["duedate"] = updateIssueOpts.dueDate
+		}
+	}
+
+	if updateIssueOpts.parent != "" {
+		if strings.EqualFold(updateIssueOpts.parent, "none") {
+			// To remove parent, use update.parent with set.none = true
+			parentOp := swagger.NewFieldUpdateOperation()
+			parentOp.SetSet(map[string]interface{}{"none": true})
+			update["parent"] = []swagger.FieldUpdateOperation{*parentOp}
+		} else {
+			fields["parent"] = map[string]interface{}{
+				"key": updateIssueOpts.parent,
+			}
 		}
 	}
 
