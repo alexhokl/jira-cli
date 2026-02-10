@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strings"
 	"text/tabwriter"
 	"unicode/utf8"
@@ -952,4 +953,28 @@ func filterBoardsByType(boards []swagger_software.GetAllBoards200ResponseValuesI
 		}
 	}
 	return filtered
+}
+
+// openBrowser opens the specified URL in the default browser.
+// It uses platform-specific commands: open on macOS, xdg-open on Linux, and cmd /c start on Windows.
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+
+	return cmd.Start()
+}
+
+// getIssueURL returns the URL to view an issue in the browser.
+func getIssueURL(issueKey string) string {
+	return fmt.Sprintf("https://%s.atlassian.net/browse/%s", viper.GetString("organization"), issueKey)
 }

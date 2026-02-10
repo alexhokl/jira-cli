@@ -15,6 +15,7 @@ type getIssueOptions struct {
 	id              string
 	descriptionOnly bool
 	noImages        bool
+	view            bool
 }
 
 var getIssueOpts = getIssueOptions{}
@@ -35,6 +36,9 @@ Examples:
   # Get issue without inline images
   jira-cli get issue -i PROJ-123 --no-images
 
+  # Open the issue in the default browser
+  jira-cli get issue -i PROJ-123 --view
+
 Note: Images are displayed inline by default in terminals that support
 the Kitty graphics protocol (Ghostty, Kitty, WezTerm).`,
 	RunE: runGetIssue,
@@ -47,11 +51,19 @@ func init() {
 	flags.StringVarP(&getIssueOpts.id, "id", "i", "", "Issue ID")
 	flags.BoolVar(&getIssueOpts.descriptionOnly, "description-only", false, "Output only the description in markdown format")
 	flags.BoolVar(&getIssueOpts.noImages, "no-images", false, "Do not display images inline")
+	flags.BoolVarP(&getIssueOpts.view, "view", "v", false, "Open the issue in the default browser")
 
 	getIssueCmd.MarkFlagRequired("id")
 }
 
 func runGetIssue(_ *cobra.Command, _ []string) error {
+	// Handle --view flag: open issue in browser and exit
+	if getIssueOpts.view {
+		url := getIssueURL(getIssueOpts.id)
+		fmt.Printf("Opening %s in browser...\n", url)
+		return openBrowser(url)
+	}
+
 	client := newClient()
 	ctx := getAuthContext()
 	issue, _, err := client.IssuesAPI.GetIssue(ctx, getIssueOpts.id).Execute()
