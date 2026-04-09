@@ -820,6 +820,56 @@ func TestBuildJQL(t *testing.T) {
 			},
 			expected: "project = MYPROJ ORDER BY status DESC",
 		},
+		// Test cases for status-category filter
+		{
+			name: "single status category TODO",
+			opts: listIssuesOptions{
+				project:          "MYPROJ",
+				statusCategories: []string{"TODO"},
+			},
+			expected: `project = MYPROJ AND statusCategory = "To Do" ORDER BY status DESC`,
+		},
+		{
+			name: "single status category IN_PROGRESS",
+			opts: listIssuesOptions{
+				project:          "MYPROJ",
+				statusCategories: []string{"IN_PROGRESS"},
+			},
+			expected: `project = MYPROJ AND statusCategory = "In Progress" ORDER BY status DESC`,
+		},
+		{
+			name: "single status category DONE",
+			opts: listIssuesOptions{
+				project:          "MYPROJ",
+				statusCategories: []string{"DONE"},
+			},
+			expected: `project = MYPROJ AND statusCategory = Done ORDER BY status DESC`,
+		},
+		{
+			name: "multiple status categories",
+			opts: listIssuesOptions{
+				project:          "MYPROJ",
+				statusCategories: []string{"TODO", "IN_PROGRESS"},
+			},
+			expected: `project = MYPROJ AND statusCategory IN ("To Do", "In Progress") ORDER BY status DESC`,
+		},
+		{
+			name: "all three status categories",
+			opts: listIssuesOptions{
+				project:          "MYPROJ",
+				statusCategories: []string{"TODO", "IN_PROGRESS", "DONE"},
+			},
+			expected: `project = MYPROJ AND statusCategory IN ("To Do", "In Progress", Done) ORDER BY status DESC`,
+		},
+		{
+			name: "status category combined with other filters",
+			opts: listIssuesOptions{
+				project:          "MYPROJ",
+				statusCategories: []string{"IN_PROGRESS"},
+				assignee:         "currentUser()",
+			},
+			expected: `project = MYPROJ AND statusCategory = "In Progress" AND assignee = currentUser() ORDER BY status DESC`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -875,6 +925,117 @@ func TestBuildJQLCustomFieldError(t *testing.T) {
 			}
 			if err.Error() != tt.expectedErr {
 				t.Errorf("buildJQL() error = %q, want %q", err.Error(), tt.expectedErr)
+			}
+		})
+	}
+}
+
+func TestBuildJQLStatusCategoryError(t *testing.T) {
+	// Save original options and restore after test
+	originalOpts := listIssuesOpts
+	defer func() { listIssuesOpts = originalOpts }()
+
+	tests := []struct {
+		name        string
+		opts        listIssuesOptions
+		expectedErr string
+	}{
+		{
+			name: "invalid status category",
+			opts: listIssuesOptions{
+				project:          "MYPROJ",
+				statusCategories: []string{"INVALID"},
+			},
+			expectedErr: "invalid status category \"INVALID\": allowed values are TODO, IN_PROGRESS, DONE",
+		},
+		{
+			name: "one valid and one invalid status category",
+			opts: listIssuesOptions{
+				project:          "MYPROJ",
+				statusCategories: []string{"TODO", "UNKNOWN"},
+			},
+			expectedErr: "invalid status category \"UNKNOWN\": allowed values are TODO, IN_PROGRESS, DONE",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			listIssuesOpts = tt.opts
+			_, err := buildJQL()
+			if err == nil {
+				t.Errorf("buildJQL() expected error but got nil")
+				return
+			}
+			if err.Error() != tt.expectedErr {
+				t.Errorf("buildJQL() error = %q, want %q", err.Error(), tt.expectedErr)
+			}
+		})
+	}
+}
+
+func TestBuildStatusCategoryCondition(t *testing.T) {
+	// Save original options and restore after test
+	originalOpts := listIssuesOpts
+	defer func() { listIssuesOpts = originalOpts }()
+
+	tests := []struct {
+		name        string
+		categories  []string
+		expected    string
+		expectedErr string
+	}{
+		{
+			name:       "no categories returns empty string",
+			categories: nil,
+			expected:   "",
+		},
+		{
+			name:       "single TODO",
+			categories: []string{"TODO"},
+			expected:   `statusCategory = "To Do"`,
+		},
+		{
+			name:       "single IN_PROGRESS",
+			categories: []string{"IN_PROGRESS"},
+			expected:   `statusCategory = "In Progress"`,
+		},
+		{
+			name:       "single DONE",
+			categories: []string{"DONE"},
+			expected:   `statusCategory = Done`,
+		},
+		{
+			name:       "multiple categories uses IN",
+			categories: []string{"TODO", "IN_PROGRESS"},
+			expected:   `statusCategory IN ("To Do", "In Progress")`,
+		},
+		{
+			name:        "invalid category returns error",
+			categories:  []string{"CLOSED"},
+			expectedErr: `invalid status category "CLOSED": allowed values are TODO, IN_PROGRESS, DONE`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			listIssuesOpts = listIssuesOptions{statusCategories: tt.categories}
+			result, err := buildStatusCategoryCondition()
+			if tt.expectedErr != "" {
+				if err == nil {
+					t.Errorf("buildStatusCategoryCondition() expected error but got nil")
+					return
+				}
+				if err.Error() != tt.expectedErr {
+					t.Errorf("buildStatusCategoryCondition() error = %q, want %q", err.Error(), tt.expectedErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("buildStatusCategoryCondition() unexpected error: %v", err)
+				return
+			}
+			if result != tt.expected {
+				t.Errorf("buildStatusCategoryCondition() = %q, want %q", result, tt.expected)
 			}
 		})
 	}

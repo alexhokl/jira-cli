@@ -11,25 +11,34 @@ import (
 )
 
 type listIssuesOptions struct {
-	jql           string
-	project       string
-	status        string
-	assignee      string
-	reporter      string
-	labels        []string
-	issueType     string
-	priority      string
-	sprint        string
-	component     string
-	fixVersion    string
-	createdAfter  string
-	createdBefore string
-	updatedAfter  string
-	updatedBefore string
-	customFields  []string
-	orderBy       string
-	maxResults    int32
-	idOnly        bool
+	jql              string
+	project          string
+	status           string
+	statusCategories []string
+	assignee         string
+	reporter         string
+	labels           []string
+	issueType        string
+	priority         string
+	sprint           string
+	component        string
+	fixVersion       string
+	createdAfter     string
+	createdBefore    string
+	updatedAfter     string
+	updatedBefore    string
+	customFields     []string
+	orderBy          string
+	maxResults       int32
+	idOnly           bool
+}
+
+// validStatusCategories defines the allowed values for the --status-category flag.
+// Keys are the user-facing values; values are the JQL statusCategory names.
+var validStatusCategories = map[string]string{
+	"TODO":        "To Do",
+	"IN_PROGRESS": "In Progress",
+	"DONE":        "Done",
 }
 
 var listIssuesOpts = listIssuesOptions{}
@@ -81,6 +90,10 @@ func init() {
 	flags.StringVarP(&listIssuesOpts.jql, "jql", "q", "", "Raw JQL query (overrides other filter flags)")
 	flags.StringVarP(&listIssuesOpts.project, "project", "p", "", "Filter by project key")
 	flags.StringVarP(&listIssuesOpts.status, "status", "s", "", "Filter by status (e.g., 'In Progress', 'Done')")
+	flags.StringSliceVar(&listIssuesOpts.statusCategories, "status-category", nil, "Filter by status category (TODO, IN_PROGRESS, DONE); can be specified multiple times")
+	listIssuesCmd.RegisterFlagCompletionFunc("status-category", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) { //nolint:errcheck
+		return []string{"TODO", "IN_PROGRESS", "DONE"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	flags.StringVarP(&listIssuesOpts.assignee, "assignee", "a", "", "Filter by assignee (use 'me' or 'currentUser()' for yourself, 'unassigned' for unassigned)")
 	flags.StringVarP(&listIssuesOpts.reporter, "reporter", "r", "", "Filter by reporter (use 'me' or 'currentUser()' for yourself)")
 	flags.StringSliceVarP(&listIssuesOpts.labels, "label", "l", nil, "Filter by label (can be specified multiple times)")
@@ -108,9 +121,24 @@ func runListIssues(_ *cobra.Command, _ []string) error {
 		// Start with the raw JQL query
 		jql = listIssuesOpts.jql
 
-		// If project is also specified, prepend it to the JQL
+		// Prepend any additional filters that are also honoured with --jql.
+		// Build them as a prefix so the user's raw JQL is wrapped cleanly.
+		var prefixConditions []string
+
 		if listIssuesOpts.project != "" {
-			jql = fmt.Sprintf("project = %s AND (%s)", quoteJQLValue(listIssuesOpts.project), jql)
+			prefixConditions = append(prefixConditions, fmt.Sprintf("project = %s", quoteJQLValue(listIssuesOpts.project)))
+		}
+
+		statusCategoryCond, err := buildStatusCategoryCondition()
+		if err != nil {
+			return err
+		}
+		if statusCategoryCond != "" {
+			prefixConditions = append(prefixConditions, statusCategoryCond)
+		}
+
+		if len(prefixConditions) > 0 {
+			jql = fmt.Sprintf("%s AND (%s)", strings.Join(prefixConditions, " AND "), jql)
 		}
 	} else {
 		var err error
@@ -188,6 +216,14 @@ func buildJQL() (string, error) {
 
 	if listIssuesOpts.status != "" {
 		conditions = append(conditions, fmt.Sprintf("status = %s", quoteJQLValue(listIssuesOpts.status)))
+	}
+
+	if len(listIssuesOpts.statusCategories) > 0 {
+		cond, err := buildStatusCategoryCondition()
+		if err != nil {
+			return "", err
+		}
+		conditions = append(conditions, cond)
 	}
 
 	if listIssuesOpts.assignee != "" {
@@ -281,6 +317,27 @@ func buildJQL() (string, error) {
 	}
 
 	return jql, nil
+}
+
+// buildStatusCategoryCondition returns a JQL condition string for the
+// --status-category flag values stored in listIssuesOpts.statusCategories.
+// Returns an empty string when no categories are set, and an error for invalid values.
+func buildStatusCategoryCondition() (string, error) {
+	if len(listIssuesOpts.statusCategories) == 0 {
+		return "", nil
+	}
+	var categoryNames []string
+	for _, cat := range listIssuesOpts.statusCategories {
+		name, ok := validStatusCategories[cat]
+		if !ok {
+			return "", fmt.Errorf("invalid status category %q: allowed values are TODO, IN_PROGRESS, DONE", cat)
+		}
+		categoryNames = append(categoryNames, quoteJQLValue(name))
+	}
+	if len(categoryNames) == 1 {
+		return fmt.Sprintf("statusCategory = %s", categoryNames[0]), nil
+	}
+	return fmt.Sprintf("statusCategory IN (%s)", strings.Join(categoryNames, ", ")), nil
 }
 
 func quoteJQLValue(value string) string {
