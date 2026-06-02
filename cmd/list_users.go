@@ -44,7 +44,7 @@ Examples:
   jira-cli list users --state active --kind atlassian
 
   # List first 100 users
-  jira-cli list users --max-results 100`,
+  jira-cli list users --limit 100`,
 	RunE: runListUsers,
 }
 
@@ -52,7 +52,7 @@ func init() {
 	listCmd.AddCommand(listUsersCmd)
 
 	flags := listUsersCmd.Flags()
-	flags.Int32VarP(&listUsersOpts.maxResults, "max-results", "m", 0, "Maximum number of results to return (0 for all)")
+	flags.Int32Var(&listUsersOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 	flags.StringVarP(&listUsersOpts.state, "state", "s", "", "Filter by user state (active, inactive)")
 	flags.StringVarP(&listUsersOpts.kind, "kind", "k", "", "Filter by account type (atlassian, app, customer)")
 }

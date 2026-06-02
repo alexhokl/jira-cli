@@ -108,7 +108,7 @@ func init() {
 	flags.StringVar(&listIssuesOpts.updatedBefore, "updated-before", "", "Filter by updated date (e.g., '2024-12-31', '-1d')")
 	flags.StringArrayVar(&listIssuesOpts.customFields, "custom-field", nil, "Custom field in format 'name=value' (can be specified multiple times)")
 	flags.StringVarP(&listIssuesOpts.orderBy, "order-by", "o", "", "Order by field (e.g., 'created DESC', 'priority ASC')")
-	flags.Int32VarP(&listIssuesOpts.maxResults, "max-results", "m", 0, "Maximum number of results to return (0 for all)")
+	flags.Int32Var(&listIssuesOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 	flags.BoolVar(&listIssuesOpts.idOnly, "id-only", false, "Show only issue IDs (useful for scripting)")
 }
 

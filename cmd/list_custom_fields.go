@@ -19,6 +19,7 @@ type listCustomFieldsOptions struct {
 	project      string
 	issueType    string
 	showContexts bool
+	maxResults   int32
 }
 
 var listCustomFieldsOpts = listCustomFieldsOptions{}
@@ -57,6 +58,7 @@ func init() {
 	flags.StringVarP(&listCustomFieldsOpts.project, "project", "p", "", "Filter fields by project key")
 	flags.StringVarP(&listCustomFieldsOpts.issueType, "issue-type", "t", "", "Filter fields by issue type name")
 	flags.BoolVarP(&listCustomFieldsOpts.showContexts, "show-contexts", "c", false, "Show issue type mapping details")
+	flags.Int32Var(&listCustomFieldsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 }
 
 func runListCustomFields(_ *cobra.Command, _ []string) error {
@@ -104,6 +106,11 @@ func runListCustomFields(_ *cobra.Command, _ []string) error {
 	if len(customFields) == 0 {
 		fmt.Println("No custom fields found")
 		return nil
+	}
+
+	// Apply limit if specified
+	if listCustomFieldsOpts.maxResults > 0 && int32(len(customFields)) > listCustomFieldsOpts.maxResults {
+		customFields = customFields[:listCustomFieldsOpts.maxResults]
 	}
 
 	// Fetch context mappings if requested

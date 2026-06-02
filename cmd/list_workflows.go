@@ -11,8 +11,9 @@ import (
 )
 
 type listWorkflowsOptions struct {
-	query    string
-	isActive *bool
+	query      string
+	isActive   *bool
+	maxResults int32
 }
 
 var listWorkflowsOpts = listWorkflowsOptions{}
@@ -44,6 +45,7 @@ func init() {
 	flags.StringVarP(&listWorkflowsOpts.query, "query", "q", "", "Filter workflows by name (partial match)")
 	flags.Bool("active", false, "Show only active workflows")
 	flags.Bool("inactive", false, "Show only inactive workflows")
+	flags.Int32Var(&listWorkflowsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 }
 
 func runListWorkflows(cmd *cobra.Command, _ []string) error {
@@ -90,6 +92,11 @@ func runListWorkflows(cmd *cobra.Command, _ []string) error {
 
 		// Check if we've fetched all results
 		if result.GetIsLast() || len(result.GetValues()) == 0 {
+			break
+		}
+
+		if listWorkflowsOpts.maxResults > 0 && int32(len(workflows)) >= listWorkflowsOpts.maxResults {
+			workflows = workflows[:listWorkflowsOpts.maxResults]
 			break
 		}
 

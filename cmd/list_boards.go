@@ -15,6 +15,7 @@ type listBoardsOptions struct {
 	boardType      string
 	includePrivate bool
 	orderByName    bool
+	maxResults     int32
 }
 
 var listBoardsOpts = listBoardsOptions{}
@@ -34,6 +35,7 @@ func init() {
 	flags.StringVarP(&listBoardsOpts.boardType, "type", "t", "", "Filter by board type (scrum, kanban, simple)")
 	flags.BoolVar(&listBoardsOpts.includePrivate, "include-private", false, "Include private boards")
 	flags.BoolVar(&listBoardsOpts.orderByName, "order-by-name", false, "Order results by name")
+	flags.Int32Var(&listBoardsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 }
 
 // Note: filterBoardsByType is defined in helper.go
@@ -70,6 +72,11 @@ func runListBoards(_ *cobra.Command, _ []string) error {
 		}
 
 		allBoards = append(allBoards, result.GetValues()...)
+
+		if listBoardsOpts.maxResults > 0 && int32(len(allBoards)) >= listBoardsOpts.maxResults {
+			allBoards = allBoards[:listBoardsOpts.maxResults]
+			break
+		}
 
 		if result.GetIsLast() {
 			break

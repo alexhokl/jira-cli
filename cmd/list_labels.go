@@ -23,7 +23,7 @@ Examples:
   jira-cli list labels
 
   # List first 100 labels
-  jira-cli list labels --max-results 100`,
+  jira-cli list labels --limit 100`,
 	RunE: runListLabels,
 }
 
@@ -31,7 +31,7 @@ func init() {
 	listCmd.AddCommand(listLabelsCmd)
 
 	flags := listLabelsCmd.Flags()
-	flags.Int32VarP(&listLabelsOpts.maxResults, "max-results", "m", 0, "Maximum number of results to return (0 for all)")
+	flags.Int32Var(&listLabelsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 }
 
 func runListLabels(_ *cobra.Command, _ []string) error {

@@ -11,9 +11,10 @@ import (
 )
 
 type listStatusOptions struct {
-	query    string
-	category string
-	project  string
+	query      string
+	category   string
+	project    string
+	maxResults int32
 }
 
 var listStatusOpts = listStatusOptions{}
@@ -45,6 +46,7 @@ func init() {
 	flags.StringVarP(&listStatusOpts.query, "query", "q", "", "Filter statuses by name (partial match)")
 	flags.StringVarP(&listStatusOpts.category, "category", "c", "", "Filter by category (TODO, IN_PROGRESS, DONE)")
 	flags.StringVarP(&listStatusOpts.project, "project", "p", "", "Filter statuses by project key")
+	flags.Int32Var(&listStatusOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 }
 
 func runListStatus(_ *cobra.Command, _ []string) error {
@@ -124,6 +126,11 @@ func runListStatus(_ *cobra.Command, _ []string) error {
 
 		// Check if we've fetched all results
 		if result.GetIsLast() || len(result.GetValues()) == 0 {
+			break
+		}
+
+		if listStatusOpts.maxResults > 0 && int32(len(statuses)) >= listStatusOpts.maxResults {
+			statuses = statuses[:listStatusOpts.maxResults]
 			break
 		}
 

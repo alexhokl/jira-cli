@@ -14,8 +14,9 @@ import (
 )
 
 type listSprintsOptions struct {
-	boardId int64
-	state   []string
+	boardId    int64
+	state      []string
+	maxResults int32
 }
 
 var listSprintsOpts = listSprintsOptions{}
@@ -32,6 +33,7 @@ func init() {
 	flags := listSprintsCmd.Flags()
 	flags.Int64VarP(&listSprintsOpts.boardId, "board-id", "b", 0, "Board ID (required)")
 	flags.StringSliceVarP(&listSprintsOpts.state, "state", "s", nil, "Filter by sprint state (future, active, closed); can be specified multiple times")
+	flags.Int32Var(&listSprintsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 
 	listSprintsCmd.MarkFlagRequired("board-id")
 }
@@ -82,6 +84,11 @@ func runListSprints(_ *cobra.Command, _ []string) error {
 			if len(stateFilter) == 0 || stateFilter[sprint.GetState()] {
 				allSprints = append(allSprints, sprint)
 			}
+		}
+
+		if listSprintsOpts.maxResults > 0 && int32(len(allSprints)) >= listSprintsOpts.maxResults {
+			allSprints = allSprints[:listSprintsOpts.maxResults]
+			break
 		}
 
 		if result.IsLast {

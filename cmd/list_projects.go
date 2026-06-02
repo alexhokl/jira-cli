@@ -10,8 +10,9 @@ import (
 )
 
 type listProjectsOptions struct {
-	query   string
-	orderBy string
+	query      string
+	orderBy    string
+	maxResults int32
 }
 
 var listProjectsOpts = listProjectsOptions{}
@@ -28,6 +29,7 @@ func init() {
 	flags := listProjectsCmd.Flags()
 	flags.StringVarP(&listProjectsOpts.query, "query", "q", "", "Filter by project name or key (partial match)")
 	flags.StringVarP(&listProjectsOpts.orderBy, "order-by", "o", "", "Order by field (e.g., name, key, -name, -key)")
+	flags.Int32Var(&listProjectsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 }
 
 func runListProjects(_ *cobra.Command, _ []string) error {
@@ -53,6 +55,11 @@ func runListProjects(_ *cobra.Command, _ []string) error {
 		}
 
 		allProjects = append(allProjects, result.GetValues()...)
+
+		if listProjectsOpts.maxResults > 0 && int32(len(allProjects)) >= listProjectsOpts.maxResults {
+			allProjects = allProjects[:listProjectsOpts.maxResults]
+			break
+		}
 
 		if result.GetIsLast() {
 			break
