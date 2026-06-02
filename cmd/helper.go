@@ -574,6 +574,32 @@ func convertMarkdownToADF(markdown string) map[string]any {
 			continue
 		}
 
+		// Check for expand block
+		if strings.HasPrefix(line, ":::expand") {
+			title := strings.TrimSpace(strings.TrimPrefix(line, ":::expand"))
+			var bodyLines []string
+			i++
+			for i < len(lines) && lines[i] != ":::" {
+				bodyLines = append(bodyLines, lines[i])
+				i++
+			}
+			if i < len(lines) {
+				i++ // skip closing :::
+			}
+
+			innerDoc := convertMarkdownToADF(strings.Join(bodyLines, "\n"))
+			var innerContent []map[string]any
+			if c, ok := innerDoc["content"].([]map[string]any); ok {
+				innerContent = c
+			}
+			content = append(content, map[string]any{
+				"type":    "expand",
+				"attrs":   map[string]any{"title": title},
+				"content": innerContent,
+			})
+			continue
+		}
+
 		// Regular paragraph
 		content = append(content, map[string]any{
 			"type":    "paragraph",

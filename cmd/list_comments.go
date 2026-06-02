@@ -306,6 +306,25 @@ func convertBlockWithImages(block any, result *strings.Builder, depth int, attMa
 			}
 		}
 
+	case "expand", "nestedExpand":
+		attrs, _ := blockMap["attrs"].(map[string]any)
+		title, _ := attrs["title"].(string)
+		if title != "" {
+			result.WriteString(fmt.Sprintf("**%s**\n", title))
+		}
+		if contentList, ok := blockMap["content"].([]any); ok {
+			var inner strings.Builder
+			for _, item := range contentList {
+				convertBlockWithImages(item, &inner, depth, attMaps)
+			}
+			if s := strings.TrimRight(inner.String(), "\n"); s != "" {
+				for _, line := range strings.Split(s, "\n") {
+					result.WriteString("  " + line + "\n")
+				}
+			}
+		}
+		result.WriteString("\n")
+
 	default:
 		// For unknown block types, try to extract text content
 		convertInlineContent(blockMap, result)
