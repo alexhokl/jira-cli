@@ -12,7 +12,8 @@ import (
 )
 
 type listWorkflowStatusOptions struct {
-	name string
+	name   string
+	format string
 }
 
 var listWorkflowStatusOpts = listWorkflowStatusOptions{}
@@ -33,6 +34,7 @@ func init() {
 
 	flags := listWorkflowStatusCmd.Flags()
 	flags.StringVarP(&listWorkflowStatusOpts.name, "name", "n", "", "Workflow name")
+	flags.StringVar(&listWorkflowStatusOpts.format, "format", "table", "Output format: table or json")
 
 	listWorkflowStatusCmd.MarkFlagRequired("name")
 }
@@ -64,10 +66,25 @@ func runListWorkflowStatus(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	// Build typed slice for output
+	var items []workflowStatusInfo
+	for _, s := range statuses {
+		items = append(items, workflowStatusInfo{
+			ID:          s.GetId(),
+			Name:        s.GetName(),
+			Category:    s.GetStatusCategory(),
+			Description: s.GetDescription(),
+		})
+	}
+
 	// Sort statuses by name
-	sort.Slice(statuses, func(i, j int) bool {
-		return strings.ToLower(statuses[i].GetName()) < strings.ToLower(statuses[j].GetName())
+	sort.Slice(items, func(i, j int) bool {
+		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
 	})
+
+	if listWorkflowStatusOpts.format == "json" {
+		return printJSON(items)
+	}
 
 	yellow := color.New(color.FgYellow).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
@@ -77,17 +94,24 @@ func runListWorkflowStatus(_ *cobra.Command, _ []string) error {
 	w := newTableWriter(os.Stdout, 0, 2)
 	w.row(cyan("ID"), cyan("NAME"), cyan("CATEGORY"), cyan("DESCRIPTION"))
 
-	for _, s := range statuses {
+	for _, s := range items {
 		// Truncate description if too long
-		desc := s.GetDescription()
+		desc := s.Description
 		if len(desc) > 50 {
 			desc = desc[:47] + "..."
 		}
-		w.row(s.GetId(), yellow(s.GetName()), s.GetStatusCategory(), desc)
+		w.row(s.ID, yellow(s.Name), s.Category, desc)
 	}
 	w.flush()
 
-	fmt.Printf("\nFound %d statuses\n", len(statuses))
+	fmt.Printf("\nFound %d statuses\n", len(items))
 
 	return nil
+}
+
+type workflowStatusInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Category    string `json:"category"`
+	Description string `json:"description"`
 }

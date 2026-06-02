@@ -31,6 +31,7 @@ type listIssuesOptions struct {
 	orderBy          string
 	maxResults       int32
 	idOnly           bool
+	format           string
 }
 
 // validStatusCategories defines the allowed values for the --status-category flag.
@@ -110,9 +111,14 @@ func init() {
 	flags.StringVarP(&listIssuesOpts.orderBy, "order-by", "o", "", "Order by field (e.g., 'created DESC', 'priority ASC')")
 	flags.Int32Var(&listIssuesOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 	flags.BoolVar(&listIssuesOpts.idOnly, "id-only", false, "Show only issue IDs (useful for scripting)")
+	flags.StringVar(&listIssuesOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListIssues(_ *cobra.Command, _ []string) error {
+	if listIssuesOpts.idOnly && listIssuesOpts.format == "json" {
+		return fmt.Errorf("--id-only and --format json cannot be used together")
+	}
+
 	client := newClient()
 	ctx := getAuthContext()
 
@@ -201,10 +207,55 @@ func runListIssues(_ *cobra.Command, _ []string) error {
 		for _, issue := range allIssues {
 			fmt.Println(issue.GetKey())
 		}
+	} else if listIssuesOpts.format == "json" {
+		var items []issueOutput
+		for _, issue := range allIssues {
+			fields := issue.Fields
+			getString := func(key string) string {
+				if v, ok := fields[key].(map[string]any); ok {
+					if name, ok := v["name"].(string); ok {
+						return name
+					}
+				}
+				return ""
+			}
+			getDisplayName := func(key string) string {
+				if v, ok := fields[key].(map[string]any); ok {
+					if name, ok := v["displayName"].(string); ok {
+						return name
+					}
+				}
+				return ""
+			}
+			summary := ""
+			if s, ok := fields["summary"].(string); ok {
+				summary = s
+			}
+			items = append(items, issueOutput{
+				Key:      issue.GetKey(),
+				Type:     getString("issuetype"),
+				Summary:  summary,
+				Status:   getString("status"),
+				Assignee: getDisplayName("assignee"),
+				Reporter: getDisplayName("reporter"),
+				Priority: getString("priority"),
+			})
+		}
+		return printJSON(items)
 	} else {
 		printIssues(allIssues)
 	}
 	return nil
+}
+
+type issueOutput struct {
+	Key      string `json:"key"`
+	Type     string `json:"type"`
+	Summary  string `json:"summary"`
+	Status   string `json:"status"`
+	Assignee string `json:"assignee"`
+	Reporter string `json:"reporter"`
+	Priority string `json:"priority"`
 }
 
 func buildJQL() (string, error) {

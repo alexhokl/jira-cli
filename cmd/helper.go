@@ -1000,6 +1000,13 @@ func openBrowser(url string) error {
 	return cmd.Start()
 }
 
+// printJSON marshals v to indented JSON and writes it to stdout.
+func printJSON(v any) error {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
+}
+
 // getIssueURL returns the URL to view an issue in the browser.
 func getIssueURL(issueKey string) string {
 	return fmt.Sprintf("https://%s.atlassian.net/browse/%s", viper.GetString("organization"), issueKey)

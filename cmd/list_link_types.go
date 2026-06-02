@@ -7,6 +7,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type listLinkTypesOptions struct {
+	format string
+}
+
+var listLinkTypesOpts = listLinkTypesOptions{}
+
 var listLinkTypesCmd = &cobra.Command{
 	Use:   "link-types",
 	Short: "List all issue link types",
@@ -28,6 +34,7 @@ Examples:
 
 func init() {
 	listCmd.AddCommand(listLinkTypesCmd)
+	listLinkTypesCmd.Flags().StringVar(&listLinkTypesOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListLinkTypes(_ *cobra.Command, _ []string) error {
@@ -46,17 +53,37 @@ func runListLinkTypes(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	// Build typed slice for output
+	var items []linkTypeOutput
+	for _, lt := range linkTypes {
+		items = append(items, linkTypeOutput{
+			Name:    lt.GetName(),
+			Inward:  lt.GetInward(),
+			Outward: lt.GetOutward(),
+		})
+	}
+
+	if listLinkTypesOpts.format == "json" {
+		return printJSON(items)
+	}
+
 	color.NoColor = noColor
 	yellow := color.New(color.FgYellow).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
 
-	for _, lt := range linkTypes {
+	for _, item := range items {
 		fmt.Printf("%s (inward: %s, outward: %s)\n",
-			yellow(lt.GetName()),
-			cyan(lt.GetInward()),
-			cyan(lt.GetOutward()),
+			yellow(item.Name),
+			cyan(item.Inward),
+			cyan(item.Outward),
 		)
 	}
 
 	return nil
+}
+
+type linkTypeOutput struct {
+	Name    string `json:"name"`
+	Inward  string `json:"inward"`
+	Outward string `json:"outward"`
 }

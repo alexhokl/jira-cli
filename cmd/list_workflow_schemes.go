@@ -28,7 +28,10 @@ Examples:
 
 func init() {
 	listCmd.AddCommand(listWorkflowSchemesCmd)
+	listWorkflowSchemesCmd.Flags().StringVar(&listWorkflowSchemesFormat, "format", "table", "Output format: table or json")
 }
+
+var listWorkflowSchemesFormat string
 
 func runListWorkflowSchemes(_ *cobra.Command, _ []string) error {
 	client := newClient()
@@ -50,11 +53,11 @@ func runListWorkflowSchemes(_ *cobra.Command, _ []string) error {
 
 		for _, scheme := range result.GetValues() {
 			schemes = append(schemes, workflowSchemeInfo{
-				id:              scheme.GetId(),
-				name:            scheme.GetName(),
-				description:     scheme.GetDescription(),
-				defaultWorkflow: scheme.GetDefaultWorkflow(),
-				draft:           scheme.GetDraft(),
+				ID:              scheme.GetId(),
+				Name:            scheme.GetName(),
+				Description:     scheme.GetDescription(),
+				DefaultWorkflow: scheme.GetDefaultWorkflow(),
+				Draft:           scheme.GetDraft(),
 			})
 		}
 
@@ -122,16 +125,20 @@ func runListWorkflowSchemes(_ *cobra.Command, _ []string) error {
 
 	// Add project info to schemes
 	for i := range schemes {
-		if projects, ok := schemeProjects[schemes[i].id]; ok {
+		if projects, ok := schemeProjects[schemes[i].ID]; ok {
 			sort.Strings(projects)
-			schemes[i].projects = strings.Join(projects, ", ")
+			schemes[i].Projects = strings.Join(projects, ", ")
 		}
 	}
 
 	// Sort by name
 	sort.Slice(schemes, func(i, j int) bool {
-		return strings.ToLower(schemes[i].name) < strings.ToLower(schemes[j].name)
+		return strings.ToLower(schemes[i].Name) < strings.ToLower(schemes[j].Name)
 	})
+
+	if listWorkflowSchemesFormat == "json" {
+		return printJSON(schemes)
+	}
 
 	yellow := color.New(color.FgYellow).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
@@ -141,21 +148,21 @@ func runListWorkflowSchemes(_ *cobra.Command, _ []string) error {
 
 	for _, s := range schemes {
 		// Truncate description if too long
-		desc := s.description
+		desc := s.Description
 		if len(desc) > 30 {
 			desc = desc[:27] + "..."
 		}
 		// Truncate projects if too long
-		projects := s.projects
+		projects := s.Projects
 		if len(projects) > 25 {
 			projects = projects[:22] + "..."
 		}
 		// Truncate default workflow if too long
-		defaultWf := s.defaultWorkflow
+		defaultWf := s.DefaultWorkflow
 		if len(defaultWf) > 20 {
 			defaultWf = defaultWf[:17] + "..."
 		}
-		w.row(strconv.FormatInt(s.id, 10), yellow(s.name), defaultWf, projects, desc)
+		w.row(strconv.FormatInt(s.ID, 10), yellow(s.Name), defaultWf, projects, desc)
 	}
 	w.flush()
 
@@ -165,10 +172,10 @@ func runListWorkflowSchemes(_ *cobra.Command, _ []string) error {
 }
 
 type workflowSchemeInfo struct {
-	id              int64
-	name            string
-	description     string
-	defaultWorkflow string
-	draft           bool
-	projects        string
+	ID              int64  `json:"id"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	DefaultWorkflow string `json:"defaultWorkflow"`
+	Draft           bool   `json:"draft"`
+	Projects        string `json:"projects"`
 }

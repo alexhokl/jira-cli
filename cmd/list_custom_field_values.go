@@ -18,6 +18,7 @@ type listCustomFieldValuesOptions struct {
 	showDisabled bool
 	idOnly       bool
 	valueOnly    bool
+	format       string
 }
 
 var listCustomFieldValuesOpts = listCustomFieldValuesOptions{}
@@ -49,6 +50,7 @@ func init() {
 	flags.BoolVar(&listCustomFieldValuesOpts.valueOnly, "value-only", false, "Output only values, one per line")
 	listCustomFieldValuesCmd.MarkFlagRequired("name")
 	listCustomFieldValuesCmd.MarkFlagsMutuallyExclusive("id-only", "value-only")
+	flags.StringVar(&listCustomFieldValuesOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListCustomFieldValues(_ *cobra.Command, _ []string) error {
@@ -90,10 +92,10 @@ func runListCustomFieldValues(_ *cobra.Command, _ []string) error {
 
 		for _, opt := range options {
 			allOptions = append(allOptions, customFieldOptionValue{
-				id:          opt.GetId(),
-				value:       opt.GetValue(),
-				disabled:    opt.GetDisabled(),
-				contextName: context.GetName(),
+				ID:          opt.GetId(),
+				Value:       opt.GetValue(),
+				Disabled:    opt.GetDisabled(),
+				ContextName: context.GetName(),
 			})
 		}
 	}
@@ -106,7 +108,7 @@ func runListCustomFieldValues(_ *cobra.Command, _ []string) error {
 	// Filter out disabled options unless show-disabled is set
 	var displayOptions []customFieldOptionValue
 	for _, opt := range allOptions {
-		if !opt.disabled || listCustomFieldValuesOpts.showDisabled {
+		if !opt.Disabled || listCustomFieldValuesOpts.showDisabled {
 			displayOptions = append(displayOptions, opt)
 		}
 	}
@@ -119,7 +121,7 @@ func runListCustomFieldValues(_ *cobra.Command, _ []string) error {
 	// Handle id-only output
 	if listCustomFieldValuesOpts.idOnly {
 		for _, opt := range displayOptions {
-			fmt.Println(opt.id)
+			fmt.Println(opt.ID)
 		}
 		return nil
 	}
@@ -127,9 +129,13 @@ func runListCustomFieldValues(_ *cobra.Command, _ []string) error {
 	// Handle value-only output
 	if listCustomFieldValuesOpts.valueOnly {
 		for _, opt := range displayOptions {
-			fmt.Println(opt.value)
+			fmt.Println(opt.Value)
 		}
 		return nil
+	}
+
+	if listCustomFieldValuesOpts.format == "json" {
+		return printJSON(displayOptions)
 	}
 
 	// Display results
@@ -147,12 +153,12 @@ func runListCustomFieldValues(_ *cobra.Command, _ []string) error {
 	for _, opt := range displayOptions {
 		if listCustomFieldValuesOpts.showDisabled {
 			status := "Active"
-			if opt.disabled {
+			if opt.Disabled {
 				status = red("Disabled")
 			}
-			w.row(opt.id, yellow(opt.value), status, opt.contextName)
+			w.row(opt.ID, yellow(opt.Value), status, opt.ContextName)
 		} else {
-			w.row(opt.id, yellow(opt.value), opt.contextName)
+			w.row(opt.ID, yellow(opt.Value), opt.ContextName)
 		}
 	}
 	w.flush()
@@ -163,10 +169,10 @@ func runListCustomFieldValues(_ *cobra.Command, _ []string) error {
 }
 
 type customFieldOptionValue struct {
-	id          string
-	value       string
-	disabled    bool
-	contextName string
+	ID          string `json:"id"`
+	Value       string `json:"value"`
+	Disabled    bool   `json:"disabled"`
+	ContextName string `json:"contextName"`
 }
 
 // findCustomFieldIdByName finds a custom field ID by its name

@@ -20,6 +20,7 @@ type listCustomFieldsOptions struct {
 	issueType    string
 	showContexts bool
 	maxResults   int32
+	format       string
 }
 
 var listCustomFieldsOpts = listCustomFieldsOptions{}
@@ -59,6 +60,7 @@ func init() {
 	flags.StringVarP(&listCustomFieldsOpts.issueType, "issue-type", "t", "", "Filter fields by issue type name")
 	flags.BoolVarP(&listCustomFieldsOpts.showContexts, "show-contexts", "c", false, "Show issue type mapping details")
 	flags.Int32Var(&listCustomFieldsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
+	flags.StringVar(&listCustomFieldsOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListCustomFields(_ *cobra.Command, _ []string) error {
@@ -116,24 +118,28 @@ func runListCustomFields(_ *cobra.Command, _ []string) error {
 	// Fetch context mappings if requested
 	if listCustomFieldsOpts.showContexts {
 		for i := range customFields {
-			issueTypes, err := getIssueTypesForField(client, ctx, customFields[i].id)
+			issueTypes, err := getIssueTypesForField(client, ctx, customFields[i].ID)
 			if err != nil {
 				// Check if it's a permission error
 				if strings.Contains(err.Error(), "403") {
-					customFields[i].issueTypes = "(requires admin)"
+					customFields[i].IssueTypes = "(requires admin)"
 				} else {
-					customFields[i].issueTypes = "(error)"
+					customFields[i].IssueTypes = "(error)"
 				}
 			} else {
-				customFields[i].issueTypes = issueTypes
+				customFields[i].IssueTypes = issueTypes
 			}
 		}
 	}
 
 	// Sort by name
 	sort.Slice(customFields, func(i, j int) bool {
-		return strings.ToLower(customFields[i].name) < strings.ToLower(customFields[j].name)
+		return strings.ToLower(customFields[i].Name) < strings.ToLower(customFields[j].Name)
 	})
+
+	if listCustomFieldsOpts.format == "json" {
+		return printJSON(customFields)
+	}
 
 	// Display results
 	yellow := color.New(color.FgYellow).SprintFunc()
@@ -144,12 +150,12 @@ func runListCustomFields(_ *cobra.Command, _ []string) error {
 	if listCustomFieldsOpts.showContexts {
 		w.row(cyan("ID"), cyan("NAME"), cyan("TYPE"), cyan("SCHEMA"), cyan("ISSUE TYPES"))
 		for _, f := range customFields {
-			w.row(f.id, yellow(f.name), f.fieldType, f.schema, f.issueTypes)
+			w.row(f.ID, yellow(f.Name), f.FieldType, f.Schema, f.IssueTypes)
 		}
 	} else {
 		w.row(cyan("ID"), cyan("NAME"), cyan("TYPE"), cyan("SCHEMA"))
 		for _, f := range customFields {
-			w.row(f.id, yellow(f.name), f.fieldType, f.schema)
+			w.row(f.ID, yellow(f.Name), f.FieldType, f.Schema)
 		}
 	}
 	w.flush()
@@ -160,11 +166,11 @@ func runListCustomFields(_ *cobra.Command, _ []string) error {
 }
 
 type customFieldDetails struct {
-	id         string
-	name       string
-	fieldType  string
-	schema     string
-	issueTypes string
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	FieldType  string `json:"fieldType"`
+	Schema     string `json:"schema"`
+	IssueTypes string `json:"issueTypes"`
 }
 
 // getAllCustomFields fetches all custom fields using the basic GetFields API
@@ -189,12 +195,12 @@ func getAllCustomFields(client *swagger.APIClient, ctx context.Context) ([]custo
 					schema = extractSchemaName(custom)
 				}
 			}
-			customFields = append(customFields, customFieldDetails{
-				id:        field.GetId(),
-				name:      field.GetName(),
-				fieldType: fieldType,
-				schema:    schema,
-			})
+		customFields = append(customFields, customFieldDetails{
+			ID:        field.GetId(),
+			Name:      field.GetName(),
+			FieldType: fieldType,
+			Schema:    schema,
+		})
 		}
 	}
 
@@ -245,12 +251,12 @@ func getCustomFieldsPaginated(client *swagger.APIClient, ctx context.Context, pr
 				schemaName = extractSchemaName(custom)
 			}
 
-			customFields = append(customFields, customFieldDetails{
-				id:        field.GetId(),
-				name:      field.GetName(),
-				fieldType: fieldType,
-				schema:    schemaName,
-			})
+		customFields = append(customFields, customFieldDetails{
+			ID:        field.GetId(),
+			Name:      field.GetName(),
+			FieldType: fieldType,
+			Schema:    schemaName,
+		})
 		}
 
 		// Check if we've fetched all results
@@ -305,10 +311,10 @@ func getCustomFieldsForProjectAndIssueType(client *swagger.APIClient, ctx contex
 		return nil, err
 	}
 
-	// Build a map for quick lookup
+		// Build a map for quick lookup
 	fieldInfoMap := make(map[string]customFieldDetails)
 	for _, f := range allFields {
-		fieldInfoMap[f.id] = f
+		fieldInfoMap[f.ID] = f
 	}
 
 	// Get fields for project and issue type
@@ -339,14 +345,14 @@ func getCustomFieldsForProjectAndIssueType(client *swagger.APIClient, ctx contex
 			if !ok {
 				// Field not in our map, use ID as name
 				fieldInfo = customFieldDetails{
-					id:        fieldId,
-					name:      fieldId,
-					fieldType: "unknown",
+					ID:        fieldId,
+					Name:      fieldId,
+					FieldType: "unknown",
 				}
 			}
 
 			// Apply query filter if provided
-			if query != "" && !strings.Contains(strings.ToLower(fieldInfo.name), strings.ToLower(query)) {
+			if query != "" && !strings.Contains(strings.ToLower(fieldInfo.Name), strings.ToLower(query)) {
 				continue
 			}
 
@@ -395,7 +401,7 @@ func getCustomFieldsByIssueType(client *swagger.APIClient, ctx context.Context, 
 	if query != "" {
 		var filtered []customFieldDetails
 		for _, f := range allFields {
-			if strings.Contains(strings.ToLower(f.name), strings.ToLower(query)) {
+			if strings.Contains(strings.ToLower(f.Name), strings.ToLower(query)) {
 				filtered = append(filtered, f)
 			}
 		}
@@ -405,7 +411,7 @@ func getCustomFieldsByIssueType(client *swagger.APIClient, ctx context.Context, 
 	// For each field, check if it applies to the target issue type
 	var result []customFieldDetails
 	for _, field := range allFields {
-		appliesToIssueType, err := fieldAppliesToIssueType(client, ctx, field.id, targetIssueTypeId)
+		appliesToIssueType, err := fieldAppliesToIssueType(client, ctx, field.ID, targetIssueTypeId)
 		if err != nil {
 			// Check for permission error
 			if isPermissionError(err) {

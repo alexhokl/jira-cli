@@ -738,11 +738,11 @@ func TestListWorkflowsLimit_ZeroMeansAll(t *testing.T) {
 func TestListCustomFieldsLimit_CapsResults(t *testing.T) {
 	// Build a slice of 5 fields and apply the same capping logic as the command.
 	fields := []customFieldDetails{
-		{id: "cf1", name: "Field 1"},
-		{id: "cf2", name: "Field 2"},
-		{id: "cf3", name: "Field 3"},
-		{id: "cf4", name: "Field 4"},
-		{id: "cf5", name: "Field 5"},
+		{ID: "cf1", Name: "Field 1"},
+		{ID: "cf2", Name: "Field 2"},
+		{ID: "cf3", Name: "Field 3"},
+		{ID: "cf4", Name: "Field 4"},
+		{ID: "cf5", Name: "Field 5"},
 	}
 
 	tests := []struct {

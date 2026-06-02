@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -17,6 +19,73 @@ func getExpand(t *testing.T, doc map[string]any) map[string]any {
 		t.Fatalf("expected node type 'expand', got %q", node["type"])
 	}
 	return node
+}
+
+func TestPrintJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		wantKeys []string
+	}{
+		{
+			name:     "struct with exported fields",
+			input:    struct{ Name, Value string }{"hello", "world"},
+			wantKeys: []string{"Name", "Value"},
+		},
+		{
+			name:  "slice of strings",
+			input: []string{"a", "b", "c"},
+		},
+		{
+			name:  "nil slice",
+			input: []string(nil),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Redirect stdout to a pipe so we can capture printJSON output
+			r, w, err := os.Pipe()
+			if err != nil {
+				t.Fatalf("os.Pipe: %v", err)
+			}
+			origStdout := os.Stdout
+			os.Stdout = w
+
+			printErr := printJSON(tt.input)
+
+			w.Close()
+			os.Stdout = origStdout
+
+			if printErr != nil {
+				t.Fatalf("printJSON returned error: %v", printErr)
+			}
+
+			buf := make([]byte, 4096)
+			n, _ := r.Read(buf)
+			r.Close()
+			output := buf[:n]
+
+			// Verify the output is valid JSON
+			var decoded any
+			if err := json.Unmarshal(output, &decoded); err != nil {
+				t.Fatalf("output is not valid JSON: %v\noutput: %s", err, output)
+			}
+
+			// Verify expected keys are present (for struct inputs)
+			if len(tt.wantKeys) > 0 {
+				m, ok := decoded.(map[string]any)
+				if !ok {
+					t.Fatalf("expected JSON object, got %T", decoded)
+				}
+				for _, key := range tt.wantKeys {
+					if _, exists := m[key]; !exists {
+						t.Errorf("expected key %q in JSON output, keys present: %v", key, m)
+					}
+				}
+			}
+		})
+	}
 }
 
 func TestConvertMarkdownToADF_Expand(t *testing.T) {

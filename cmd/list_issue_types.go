@@ -10,6 +10,7 @@ import (
 
 type listIssueTypesOptions struct {
 	project string
+	format  string
 }
 
 var listIssueTypesOpts = listIssueTypesOptions{}
@@ -33,6 +34,7 @@ func init() {
 
 	flags := listIssueTypesCmd.Flags()
 	flags.StringVarP(&listIssueTypesOpts.project, "project", "p", "", "Filter issue types by project key")
+	flags.StringVar(&listIssueTypesOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListIssueTypes(_ *cobra.Command, _ []string) error {
@@ -65,11 +67,11 @@ func runListIssueTypes(_ *cobra.Command, _ []string) error {
 
 		for _, t := range types {
 			issueTypes = append(issueTypes, issueTypeInfo{
-				id:          t.GetId(),
-				name:        t.GetName(),
-				description: t.GetDescription(),
-				subtask:     t.GetSubtask(),
-				project:     listIssueTypesOpts.project,
+				ID:          t.GetId(),
+				Name:        t.GetName(),
+				Description: t.GetDescription(),
+				Subtask:     t.GetSubtask(),
+				Project:     listIssueTypesOpts.project,
 			})
 		}
 	} else {
@@ -89,11 +91,11 @@ func runListIssueTypes(_ *cobra.Command, _ []string) error {
 				}
 			}
 			issueTypes = append(issueTypes, issueTypeInfo{
-				id:          t.GetId(),
-				name:        t.GetName(),
-				description: t.GetDescription(),
-				subtask:     t.GetSubtask(),
-				project:     projectKey,
+				ID:          t.GetId(),
+				Name:        t.GetName(),
+				Description: t.GetDescription(),
+				Subtask:     t.GetSubtask(),
+				Project:     projectKey,
 			})
 		}
 	}
@@ -101,6 +103,10 @@ func runListIssueTypes(_ *cobra.Command, _ []string) error {
 	if len(issueTypes) == 0 {
 		fmt.Println("No issue types found")
 		return nil
+	}
+
+	if listIssueTypesOpts.format == "json" {
+		return printJSON(issueTypes)
 	}
 
 	yellow := color.New(color.FgYellow).SprintFunc()
@@ -111,19 +117,19 @@ func runListIssueTypes(_ *cobra.Command, _ []string) error {
 
 	for _, t := range issueTypes {
 		subtaskStr := "No"
-		if t.subtask {
+		if t.Subtask {
 			subtaskStr = "Yes"
 		}
-		projectStr := t.project
+		projectStr := t.Project
 		if projectStr == "" {
 			projectStr = "(global)"
 		}
 		// Truncate description if too long
-		desc := t.description
+		desc := t.Description
 		if len(desc) > 50 {
 			desc = desc[:47] + "..."
 		}
-		w.row(t.id, yellow(t.name), projectStr, subtaskStr, desc)
+		w.row(t.ID, yellow(t.Name), projectStr, subtaskStr, desc)
 	}
 	w.flush()
 
@@ -133,11 +139,11 @@ func runListIssueTypes(_ *cobra.Command, _ []string) error {
 }
 
 type issueTypeInfo struct {
-	id          string
-	name        string
-	description string
-	subtask     bool
-	project     string
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Subtask     bool   `json:"subtask"`
+	Project     string `json:"project"`
 }
 
 // parseProjectId converts project ID string to int64

@@ -15,6 +15,7 @@ type listStatusOptions struct {
 	category   string
 	project    string
 	maxResults int32
+	format     string
 }
 
 var listStatusOpts = listStatusOptions{}
@@ -47,6 +48,7 @@ func init() {
 	flags.StringVarP(&listStatusOpts.category, "category", "c", "", "Filter by category (TODO, IN_PROGRESS, DONE)")
 	flags.StringVarP(&listStatusOpts.project, "project", "p", "", "Filter statuses by project key")
 	flags.Int32Var(&listStatusOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
+	flags.StringVar(&listStatusOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListStatus(_ *cobra.Command, _ []string) error {
@@ -115,12 +117,12 @@ func runListStatus(_ *cobra.Command, _ []string) error {
 			}
 
 			statuses = append(statuses, statusInfo{
-				id:          s.GetId(),
-				name:        s.GetName(),
-				category:    s.GetStatusCategory(),
-				scope:       scope,
-				project:     projectKey,
-				description: s.GetDescription(),
+				ID:          s.GetId(),
+				Name:        s.GetName(),
+				Category:    s.GetStatusCategory(),
+				Scope:       scope,
+				Project:     projectKey,
+				Description: s.GetDescription(),
 			})
 		}
 
@@ -144,8 +146,12 @@ func runListStatus(_ *cobra.Command, _ []string) error {
 
 	// Sort by name
 	sort.Slice(statuses, func(i, j int) bool {
-		return strings.ToLower(statuses[i].name) < strings.ToLower(statuses[j].name)
+		return strings.ToLower(statuses[i].Name) < strings.ToLower(statuses[j].Name)
 	})
+
+	if listStatusOpts.format == "json" {
+		return printJSON(statuses)
+	}
 
 	yellow := color.New(color.FgYellow).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
@@ -155,11 +161,11 @@ func runListStatus(_ *cobra.Command, _ []string) error {
 
 	for _, s := range statuses {
 		// Truncate description if too long
-		desc := s.description
+		desc := s.Description
 		if len(desc) > 40 {
 			desc = desc[:37] + "..."
 		}
-		w.row(s.id, yellow(s.name), s.category, s.scope, s.project, desc)
+		w.row(s.ID, yellow(s.Name), s.Category, s.Scope, s.Project, desc)
 	}
 	w.flush()
 
@@ -169,10 +175,10 @@ func runListStatus(_ *cobra.Command, _ []string) error {
 }
 
 type statusInfo struct {
-	id          string
-	name        string
-	category    string
-	scope       string
-	project     string
-	description string
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Category    string `json:"category"`
+	Scope       string `json:"scope"`
+	Project     string `json:"project"`
+	Description string `json:"description"`
 }

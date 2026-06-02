@@ -9,6 +9,7 @@ import (
 
 type listLabelsOptions struct {
 	maxResults int32
+	format     string
 }
 
 var listLabelsOpts = listLabelsOptions{}
@@ -32,6 +33,7 @@ func init() {
 
 	flags := listLabelsCmd.Flags()
 	flags.Int32Var(&listLabelsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
+	flags.StringVar(&listLabelsOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListLabels(_ *cobra.Command, _ []string) error {
@@ -70,6 +72,10 @@ func runListLabels(_ *cobra.Command, _ []string) error {
 	if len(allLabels) == 0 {
 		fmt.Println("No labels found")
 		return nil
+	}
+
+	if listLabelsOpts.format == "json" {
+		return printJSON(allLabels)
 	}
 
 	color.NoColor = noColor

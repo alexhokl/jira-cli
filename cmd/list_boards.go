@@ -16,6 +16,7 @@ type listBoardsOptions struct {
 	includePrivate bool
 	orderByName    bool
 	maxResults     int32
+	format         string
 }
 
 var listBoardsOpts = listBoardsOptions{}
@@ -36,6 +37,7 @@ func init() {
 	flags.BoolVar(&listBoardsOpts.includePrivate, "include-private", false, "Include private boards")
 	flags.BoolVar(&listBoardsOpts.orderByName, "order-by-name", false, "Order results by name")
 	flags.Int32Var(&listBoardsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
+	flags.StringVar(&listBoardsOpts.format, "format", "table", "Output format: table or json")
 }
 
 // Note: filterBoardsByType is defined in helper.go
@@ -95,28 +97,48 @@ func runListBoards(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	color.NoColor = noColor
-	yellow := color.New(color.FgYellow).SprintFunc()
-	cyan := color.New(color.FgCyan).SprintFunc()
-	green := color.New(color.FgGreen).SprintFunc()
-
+	// Build typed slice for output
+	var items []boardOutput
 	for _, board := range allBoards {
 		id := board.GetId()
 		name := board.GetName()
 		boardType := board.GetType()
-
 		projectKey := ""
 		if board.HasLocation() {
 			location := board.GetLocation()
 			projectKey = location.GetProjectKey()
 		}
+		items = append(items, boardOutput{
+			ID:         id,
+			Name:       name,
+			Type:       boardType,
+			ProjectKey: projectKey,
+		})
+	}
 
-		if projectKey != "" {
-			fmt.Printf("%s %s %s [%s]\n", yellow(fmt.Sprintf("%d", id)), name, cyan(boardType), green(projectKey))
+	if listBoardsOpts.format == "json" {
+		return printJSON(items)
+	}
+
+	color.NoColor = noColor
+	yellow := color.New(color.FgYellow).SprintFunc()
+	cyan := color.New(color.FgCyan).SprintFunc()
+	green := color.New(color.FgGreen).SprintFunc()
+
+	for _, item := range items {
+		if item.ProjectKey != "" {
+			fmt.Printf("%s %s %s [%s]\n", yellow(fmt.Sprintf("%d", item.ID)), item.Name, cyan(item.Type), green(item.ProjectKey))
 		} else {
-			fmt.Printf("%s %s %s\n", yellow(fmt.Sprintf("%d", id)), name, cyan(boardType))
+			fmt.Printf("%s %s %s\n", yellow(fmt.Sprintf("%d", item.ID)), item.Name, cyan(item.Type))
 		}
 	}
 
 	return nil
+}
+
+type boardOutput struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	ProjectKey string `json:"projectKey"`
 }

@@ -27,7 +27,10 @@ Examples:
 
 func init() {
 	listCmd.AddCommand(listIssueTypeSchemesCmd)
+	listIssueTypeSchemesCmd.Flags().StringVar(&listIssueTypeSchemesFormat, "format", "table", "Output format: table or json")
 }
+
+var listIssueTypeSchemesFormat string
 
 func runListIssueTypeSchemes(_ *cobra.Command, _ []string) error {
 	client := newClient()
@@ -54,10 +57,10 @@ func runListIssueTypeSchemes(_ *cobra.Command, _ []string) error {
 				isDefault = "Yes"
 			}
 			schemes = append(schemes, issueTypeSchemeInfo{
-				id:          scheme.GetId(),
-				name:        scheme.GetName(),
-				description: scheme.GetDescription(),
-				isDefault:   isDefault,
+				ID:          scheme.GetId(),
+				Name:        scheme.GetName(),
+				Description: scheme.GetDescription(),
+				IsDefault:   isDefault,
 			})
 		}
 
@@ -134,16 +137,20 @@ func runListIssueTypeSchemes(_ *cobra.Command, _ []string) error {
 
 	// Add project info to schemes
 	for i := range schemes {
-		if projects, ok := schemeProjects[schemes[i].id]; ok {
+		if projects, ok := schemeProjects[schemes[i].ID]; ok {
 			sort.Strings(projects)
-			schemes[i].projects = strings.Join(projects, ", ")
+			schemes[i].Projects = strings.Join(projects, ", ")
 		}
 	}
 
 	// Sort by name
 	sort.Slice(schemes, func(i, j int) bool {
-		return strings.ToLower(schemes[i].name) < strings.ToLower(schemes[j].name)
+		return strings.ToLower(schemes[i].Name) < strings.ToLower(schemes[j].Name)
 	})
+
+	if listIssueTypeSchemesFormat == "json" {
+		return printJSON(schemes)
+	}
 
 	cyan := color.New(color.FgCyan).SprintFunc()
 
@@ -152,16 +159,16 @@ func runListIssueTypeSchemes(_ *cobra.Command, _ []string) error {
 
 	for _, s := range schemes {
 		// Truncate description if too long
-		desc := s.description
+		desc := s.Description
 		if len(desc) > 40 {
 			desc = desc[:37] + "..."
 		}
 		// Truncate projects if too long
-		projects := s.projects
+		projects := s.Projects
 		if len(projects) > 30 {
 			projects = projects[:27] + "..."
 		}
-		w.row(s.id, s.name, s.isDefault, projects, desc)
+		w.row(s.ID, s.Name, s.IsDefault, projects, desc)
 	}
 	w.flush()
 
@@ -171,9 +178,9 @@ func runListIssueTypeSchemes(_ *cobra.Command, _ []string) error {
 }
 
 type issueTypeSchemeInfo struct {
-	id          string
-	name        string
-	description string
-	isDefault   string
-	projects    string
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	IsDefault   string `json:"isDefault"`
+	Projects    string `json:"projects"`
 }

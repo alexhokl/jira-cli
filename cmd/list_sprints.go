@@ -17,6 +17,7 @@ type listSprintsOptions struct {
 	boardId    int64
 	state      []string
 	maxResults int32
+	format     string
 }
 
 var listSprintsOpts = listSprintsOptions{}
@@ -34,6 +35,7 @@ func init() {
 	flags.Int64VarP(&listSprintsOpts.boardId, "board-id", "b", 0, "Board ID (required)")
 	flags.StringSliceVarP(&listSprintsOpts.state, "state", "s", nil, "Filter by sprint state (future, active, closed); can be specified multiple times")
 	flags.Int32Var(&listSprintsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
+	flags.StringVar(&listSprintsOpts.format, "format", "table", "Output format: table or json")
 
 	listSprintsCmd.MarkFlagRequired("board-id")
 }
@@ -103,27 +105,9 @@ func runListSprints(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	color.NoColor = noColor
-	yellow := color.New(color.FgYellow).SprintFunc()
-	cyan := color.New(color.FgCyan).SprintFunc()
-	green := color.New(color.FgGreen).SprintFunc()
-	red := color.New(color.FgRed).SprintFunc()
-
+	// Build typed slice for output
+	var items []sprintOutput
 	for _, sprint := range allSprints {
-		id := sprint.GetId()
-		name := sprint.GetName()
-		state := sprint.GetState()
-
-		stateColor := cyan
-		switch state {
-		case "active":
-			stateColor = green
-		case "closed":
-			stateColor = red
-		case "future":
-			stateColor = cyan
-		}
-
 		startDate := ""
 		if sprint.HasStartDate() {
 			startDate = formatDateString(sprint.GetStartDate())
@@ -132,15 +116,52 @@ func runListSprints(_ *cobra.Command, _ []string) error {
 		if sprint.HasEndDate() {
 			endDate = formatDateString(sprint.GetEndDate())
 		}
+		items = append(items, sprintOutput{
+			ID:        sprint.GetId(),
+			Name:      sprint.GetName(),
+			State:     sprint.GetState(),
+			StartDate: startDate,
+			EndDate:   endDate,
+		})
+	}
 
-		if startDate != "" && endDate != "" {
-			fmt.Printf("%s %s %s (%s - %s)\n", yellow(fmt.Sprintf("%d", id)), name, stateColor(state), startDate, endDate)
+	if listSprintsOpts.format == "json" {
+		return printJSON(items)
+	}
+
+	color.NoColor = noColor
+	yellow := color.New(color.FgYellow).SprintFunc()
+	cyan := color.New(color.FgCyan).SprintFunc()
+	green := color.New(color.FgGreen).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
+
+	for _, item := range items {
+		stateColor := cyan
+		switch item.State {
+		case "active":
+			stateColor = green
+		case "closed":
+			stateColor = red
+		case "future":
+			stateColor = cyan
+		}
+
+		if item.StartDate != "" && item.EndDate != "" {
+			fmt.Printf("%s %s %s (%s - %s)\n", yellow(fmt.Sprintf("%d", item.ID)), item.Name, stateColor(item.State), item.StartDate, item.EndDate)
 		} else {
-			fmt.Printf("%s %s %s\n", yellow(fmt.Sprintf("%d", id)), name, stateColor(state))
+			fmt.Printf("%s %s %s\n", yellow(fmt.Sprintf("%d", item.ID)), item.Name, stateColor(item.State))
 		}
 	}
 
 	return nil
+}
+
+type sprintOutput struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	StartDate string `json:"startDate"`
+	EndDate   string `json:"endDate"`
 }
 
 // formatDateString parses a date string and returns it in yyyy-MM-dd format

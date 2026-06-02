@@ -17,6 +17,7 @@ import (
 type listCommentsOptions struct {
 	id       string
 	noImages bool
+	format   string
 }
 
 var listCommentsOpts = listCommentsOptions{}
@@ -44,6 +45,7 @@ func init() {
 	flags := listCommentsCmd.Flags()
 	flags.StringVarP(&listCommentsOpts.id, "id", "i", "", "Issue ID")
 	flags.BoolVar(&listCommentsOpts.noImages, "no-images", false, "Do not display images inline")
+	flags.StringVar(&listCommentsOpts.format, "format", "table", "Output format: table or json")
 
 	listCommentsCmd.MarkFlagRequired("id")
 }
@@ -61,6 +63,28 @@ func runListComments(_ *cobra.Command, _ []string) error {
 	if len(comments) == 0 {
 		fmt.Println("No comments found")
 		return nil
+	}
+
+	// JSON format: emit raw ADF bodies without image loading
+	if listCommentsOpts.format == "json" {
+		var items []commentOutput
+		for _, comment := range comments {
+			authorObj := comment.GetAuthor()
+			author := authorObj.GetDisplayName()
+			if author == "" {
+				author = authorObj.GetEmailAddress()
+			}
+			if author == "" {
+				author = authorObj.GetAccountId()
+			}
+			items = append(items, commentOutput{
+				ID:      comment.GetId(),
+				Author:  author,
+				Created: comment.GetCreated().String(),
+				Body:    comment.Body,
+			})
+		}
+		return printJSON(items)
 	}
 
 	// Check if we should show images (default: yes, unless --no-images or terminal doesn't support it)
@@ -94,6 +118,14 @@ func runListComments(_ *cobra.Command, _ []string) error {
 	}
 
 	return nil
+}
+
+// commentOutput holds JSON-serialisable comment data with raw ADF body.
+type commentOutput struct {
+	ID      string `json:"id"`
+	Author  string `json:"author"`
+	Created string `json:"created"`
+	Body    any    `json:"body"`
 }
 
 // attachmentInfo holds information about an attachment for image display

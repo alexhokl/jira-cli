@@ -13,6 +13,7 @@ type listUsersOptions struct {
 	maxResults int32
 	state      string
 	kind       string
+	format     string
 }
 
 var listUsersOpts = listUsersOptions{}
@@ -55,6 +56,7 @@ func init() {
 	flags.Int32Var(&listUsersOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
 	flags.StringVarP(&listUsersOpts.state, "state", "s", "", "Filter by user state (active, inactive)")
 	flags.StringVarP(&listUsersOpts.kind, "kind", "k", "", "Filter by account type (atlassian, app, customer)")
+	flags.StringVar(&listUsersOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListUsers(_ *cobra.Command, _ []string) error {
@@ -130,8 +132,28 @@ func runListUsers(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	if listUsersOpts.format == "json" {
+		var items []userOutput
+		for _, user := range allUsers {
+			items = append(items, userOutput{
+				DisplayName: user.GetDisplayName(),
+				Email:       user.GetEmailAddress(),
+				AccountType: user.GetAccountType(),
+				Active:      user.GetActive(),
+			})
+		}
+		return printJSON(items)
+	}
+
 	printUsers(allUsers)
 	return nil
+}
+
+type userOutput struct {
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+	AccountType string `json:"accountType"`
+	Active      bool   `json:"active"`
 }
 
 func printUsers(users []swagger.User) {

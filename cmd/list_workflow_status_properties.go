@@ -12,7 +12,8 @@ import (
 )
 
 type listWorkflowStatusPropertiesOptions struct {
-	name string
+	name   string
+	format string
 }
 
 var listWorkflowStatusPropertiesOpts = listWorkflowStatusPropertiesOptions{}
@@ -36,6 +37,7 @@ func init() {
 
 	flags := listWorkflowStatusPropertiesCmd.Flags()
 	flags.StringVarP(&listWorkflowStatusPropertiesOpts.name, "name", "n", "", "Workflow name")
+	flags.StringVar(&listWorkflowStatusPropertiesOpts.format, "format", "table", "Output format: table or json")
 
 	listWorkflowStatusPropertiesCmd.MarkFlagRequired("name")
 }
@@ -70,12 +72,6 @@ func runListWorkflowStatusProperties(_ *cobra.Command, _ []string) error {
 	}
 
 	// Collect status properties
-	type statusPropertyInfo struct {
-		statusName string
-		key        string
-		value      string
-	}
-
 	var properties []statusPropertyInfo
 
 	for _, s := range workflow.GetStatuses() {
@@ -88,9 +84,9 @@ func runListWorkflowStatusProperties(_ *cobra.Command, _ []string) error {
 		props := s.GetProperties()
 		for key, value := range props {
 			properties = append(properties, statusPropertyInfo{
-				statusName: statusName,
-				key:        key,
-				value:      value,
+				StatusName: statusName,
+				Key:        key,
+				Value:      value,
 			})
 		}
 	}
@@ -102,11 +98,15 @@ func runListWorkflowStatusProperties(_ *cobra.Command, _ []string) error {
 
 	// Sort by status name, then by key
 	sort.Slice(properties, func(i, j int) bool {
-		if strings.ToLower(properties[i].statusName) != strings.ToLower(properties[j].statusName) {
-			return strings.ToLower(properties[i].statusName) < strings.ToLower(properties[j].statusName)
+		if strings.ToLower(properties[i].StatusName) != strings.ToLower(properties[j].StatusName) {
+			return strings.ToLower(properties[i].StatusName) < strings.ToLower(properties[j].StatusName)
 		}
-		return strings.ToLower(properties[i].key) < strings.ToLower(properties[j].key)
+		return strings.ToLower(properties[i].Key) < strings.ToLower(properties[j].Key)
 	})
+
+	if listWorkflowStatusPropertiesOpts.format == "json" {
+		return printJSON(properties)
+	}
 
 	yellow := color.New(color.FgYellow).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
@@ -118,15 +118,21 @@ func runListWorkflowStatusProperties(_ *cobra.Command, _ []string) error {
 
 	for _, p := range properties {
 		// Truncate value if too long
-		value := p.value
+		value := p.Value
 		if len(value) > 60 {
 			value = value[:57] + "..."
 		}
-		w.row(yellow(p.statusName), p.key, value)
+		w.row(yellow(p.StatusName), p.Key, value)
 	}
 	w.flush()
 
 	fmt.Printf("\nFound %d properties\n", len(properties))
 
 	return nil
+}
+
+type statusPropertyInfo struct {
+	StatusName string `json:"statusName"`
+	Key        string `json:"key"`
+	Value      string `json:"value"`
 }

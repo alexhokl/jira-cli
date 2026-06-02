@@ -9,7 +9,8 @@ import (
 )
 
 type listIssueTransitionsOptions struct {
-	id string
+	id     string
+	format string
 }
 
 var listIssueTransitionsOpts = listIssueTransitionsOptions{}
@@ -34,6 +35,7 @@ func init() {
 	flags := listIssueTransitionsCmd.Flags()
 	flags.StringVarP(&listIssueTransitionsOpts.id, "id", "i", "", "Issue ID (e.g., PROJ-123) (required)")
 	listIssueTransitionsCmd.MarkFlagRequired("id")
+	flags.StringVar(&listIssueTransitionsOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListIssueTransitions(_ *cobra.Command, _ []string) error {
@@ -64,6 +66,27 @@ func runListIssueTransitions(_ *cobra.Command, _ []string) error {
 
 	transitions := result.GetTransitions()
 
+	// Build typed slice for output
+	var items []issueTransitionInfo
+	for _, transition := range transitions {
+		toStatus := transition.GetTo()
+		toStatusName := toStatus.GetName()
+		category := ""
+		if statusCategory, ok := toStatus.GetStatusCategoryOk(); ok && statusCategory != nil {
+			category = statusCategory.GetName()
+		}
+		items = append(items, issueTransitionInfo{
+			ID:       transition.GetId(),
+			Name:     transition.GetName(),
+			ToStatus: toStatusName,
+			Category: category,
+		})
+	}
+
+	if listIssueTransitionsOpts.format == "json" {
+		return printJSON(items)
+	}
+
 	yellow := color.New(color.FgYellow).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
 	magenta := color.New(color.FgMagenta).SprintFunc()
@@ -82,24 +105,24 @@ func runListIssueTransitions(_ *cobra.Command, _ []string) error {
 	w := newTableWriter(os.Stdout, 0, 2)
 	w.row(cyan("ID"), cyan("NAME"), cyan("TO STATUS"), cyan("CATEGORY"))
 
-	for _, transition := range transitions {
-		toStatus := transition.GetTo()
-		toStatusName := toStatus.GetName()
-		category := ""
-		if statusCategory, ok := toStatus.GetStatusCategoryOk(); ok && statusCategory != nil {
-			category = statusCategory.GetName()
-		}
-
+	for _, item := range items {
 		w.row(
-			transition.GetId(),
-			yellow(transition.GetName()),
-			magenta(toStatusName),
-			category,
+			item.ID,
+			yellow(item.Name),
+			magenta(item.ToStatus),
+			item.Category,
 		)
 	}
 	w.flush()
 
-	fmt.Printf("\nFound %d available transitions\n", len(transitions))
+	fmt.Printf("\nFound %d available transitions\n", len(items))
 
 	return nil
+}
+
+type issueTransitionInfo struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	ToStatus string `json:"toStatus"`
+	Category string `json:"category"`
 }

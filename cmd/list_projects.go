@@ -13,6 +13,7 @@ type listProjectsOptions struct {
 	query      string
 	orderBy    string
 	maxResults int32
+	format     string
 }
 
 var listProjectsOpts = listProjectsOptions{}
@@ -30,6 +31,7 @@ func init() {
 	flags.StringVarP(&listProjectsOpts.query, "query", "q", "", "Filter by project name or key (partial match)")
 	flags.StringVarP(&listProjectsOpts.orderBy, "order-by", "o", "", "Order by field (e.g., name, key, -name, -key)")
 	flags.Int32Var(&listProjectsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
+	flags.StringVar(&listProjectsOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListProjects(_ *cobra.Command, _ []string) error {
@@ -73,17 +75,33 @@ func runListProjects(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	// Build typed slice for output
+	var items []projectOutput
+	for _, project := range allProjects {
+		items = append(items, projectOutput{
+			Key:  project.GetKey(),
+			Name: project.GetName(),
+			Type: project.GetProjectTypeKey(),
+		})
+	}
+
+	if listProjectsOpts.format == "json" {
+		return printJSON(items)
+	}
+
 	color.NoColor = noColor
 	yellow := color.New(color.FgYellow).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
 
-	for _, project := range allProjects {
-		key := project.GetKey()
-		name := project.GetName()
-		projectType := project.GetProjectTypeKey()
-
-		fmt.Printf("%s %s %s\n", yellow(key), name, cyan(projectType))
+	for _, item := range items {
+		fmt.Printf("%s %s %s\n", yellow(item.Key), item.Name, cyan(item.Type))
 	}
 
 	return nil
+}
+
+type projectOutput struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
+	Type string `json:"type"`
 }

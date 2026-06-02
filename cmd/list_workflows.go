@@ -14,6 +14,7 @@ type listWorkflowsOptions struct {
 	query      string
 	isActive   *bool
 	maxResults int32
+	format     string
 }
 
 var listWorkflowsOpts = listWorkflowsOptions{}
@@ -46,6 +47,7 @@ func init() {
 	flags.Bool("active", false, "Show only active workflows")
 	flags.Bool("inactive", false, "Show only inactive workflows")
 	flags.Int32Var(&listWorkflowsOpts.maxResults, "limit", 0, "Maximum number of results to return (0 for all)")
+	flags.StringVar(&listWorkflowsOpts.format, "format", "table", "Output format: table or json")
 }
 
 func runListWorkflows(cmd *cobra.Command, _ []string) error {
@@ -83,11 +85,11 @@ func runListWorkflows(cmd *cobra.Command, _ []string) error {
 		}
 
 		for _, wf := range result.GetValues() {
-			id := wf.GetId()
-			workflows = append(workflows, workflowInfo{
-				name:        id.GetName(),
-				description: wf.GetDescription(),
-			})
+		id := wf.GetId()
+		workflows = append(workflows, workflowInfo{
+			Name:        id.GetName(),
+			Description: wf.GetDescription(),
+		})
 		}
 
 		// Check if we've fetched all results
@@ -110,8 +112,12 @@ func runListWorkflows(cmd *cobra.Command, _ []string) error {
 
 	// Sort by name
 	sort.Slice(workflows, func(i, j int) bool {
-		return strings.ToLower(workflows[i].name) < strings.ToLower(workflows[j].name)
+		return strings.ToLower(workflows[i].Name) < strings.ToLower(workflows[j].Name)
 	})
+
+	if listWorkflowsOpts.format == "json" {
+		return printJSON(workflows)
+	}
 
 	cyan := color.New(color.FgCyan).SprintFunc()
 
@@ -120,11 +126,11 @@ func runListWorkflows(cmd *cobra.Command, _ []string) error {
 
 	for _, wf := range workflows {
 		// Truncate description if too long
-		desc := wf.description
+		desc := wf.Description
 		if len(desc) > 60 {
 			desc = desc[:57] + "..."
 		}
-		w.row(wf.name, desc)
+		w.row(wf.Name, desc)
 	}
 	w.flush()
 
@@ -134,6 +140,6 @@ func runListWorkflows(cmd *cobra.Command, _ []string) error {
 }
 
 type workflowInfo struct {
-	name        string
-	description string
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
