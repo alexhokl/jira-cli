@@ -15,9 +15,10 @@ import (
 )
 
 type listCommentsOptions struct {
-	id       string
-	noImages bool
-	format   string
+	id          string
+	noImages    bool
+	commentOnly bool
+	format      string
 }
 
 var listCommentsOpts = listCommentsOptions{}
@@ -46,6 +47,7 @@ func init() {
 	flags := listCommentsCmd.Flags()
 	flags.StringVarP(&listCommentsOpts.id, "id", "i", "", "Issue ID")
 	flags.BoolVar(&listCommentsOpts.noImages, "no-images", false, "Do not display images inline")
+	flags.BoolVar(&listCommentsOpts.commentOnly, "comment-only", false, "Print comment body only, without ID, author, or date")
 	flags.StringVar(&listCommentsOpts.format, "format", "table", "Output format: table or json")
 
 	listCommentsCmd.MarkFlagRequired("id")
@@ -115,7 +117,7 @@ func runListComments(_ *cobra.Command, _ []string) error {
 		if i > 0 {
 			fmt.Println()
 		}
-		printCommentWithImages(&comment, yellow, cyan, showImages, attMaps)
+		printCommentWithImages(&comment, yellow, cyan, showImages, attMaps, listCommentsOpts.commentOnly)
 	}
 
 	return nil
@@ -199,18 +201,19 @@ func buildAttachmentMaps(client *swagger.APIClient, ctx context.Context, issueID
 	return maps, nil
 }
 
-func printCommentWithImages(comment *swagger.Comment, yellow, cyan func(a ...interface{}) string, showImages bool, attMaps *attachmentMaps) {
-	authorName := getAuthorDisplayName(comment.Author)
-	createdDate := ""
-	if comment.HasCreated() {
-		createdDate = comment.GetCreated().Format("2006-01-02 15:04:05")
+func printCommentWithImages(comment *swagger.Comment, yellow, cyan func(a ...interface{}) string, showImages bool, attMaps *attachmentMaps, commentOnly bool) {
+	if !commentOnly {
+		authorName := getAuthorDisplayName(comment.Author)
+		createdDate := ""
+		if comment.HasCreated() {
+			createdDate = comment.GetCreated().Format("2006-01-02 15:04:05")
+		}
+		commentID := ""
+		if comment.HasId() {
+			commentID = comment.GetId()
+		}
+		fmt.Printf("[%s] %s - %s\n", commentID, yellow(authorName), cyan(createdDate))
 	}
-	commentID := ""
-	if comment.HasId() {
-		commentID = comment.GetId()
-	}
-
-	fmt.Printf("[%s] %s - %s\n", commentID, yellow(authorName), cyan(createdDate))
 
 	if showImages && attMaps != nil {
 		// Use the enhanced version that can display images
