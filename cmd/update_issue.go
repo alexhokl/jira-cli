@@ -409,6 +409,7 @@ type customFieldInfo struct {
 	schemaType    string        // The schema type (e.g., "string", "number", "option", "array")
 	itemType      string        // For array types, the type of items
 	custom        string        // The custom field type URI (e.g., "com.atlassian.jira.plugin.system.customfieldtypes:select")
+	renderer      string        // The renderer type (e.g., "textarea" for ADF fields)
 	allowedValues []interface{} // The list of allowed values for option fields
 }
 
@@ -546,6 +547,10 @@ func convertCustomFieldValue(value string, field customFieldInfo, projectKey str
 
 	// Handle special field types first, regardless of schema type
 	switch fieldType {
+	case "textarea":
+		// ADF textarea - convert markdown to Atlassian Document Format
+		return convertMarkdownToADF(value), nil
+
 	case "gh-sprint":
 		// Sprint field - requires sprint ID(s)
 		// Parse as comma-separated values (could be IDs or names)
@@ -713,7 +718,7 @@ func convertCustomFieldValue(value string, field customFieldInfo, projectKey str
 			return value, nil
 
 		case "textarea", "textfield":
-			return value, nil
+			return convertMarkdownToADF(value), nil
 
 		default:
 			// Default: return as-is
