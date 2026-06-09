@@ -16,8 +16,9 @@ type listIssueTypesOptions struct {
 var listIssueTypesOpts = listIssueTypesOptions{}
 
 var listIssueTypesCmd = &cobra.Command{
-	Use:   "issue-types",
-	Short: "List issue types",
+	Use:     "issue-types",
+	Aliases: []string{"issue-type"},
+	Short:   "List issue types",
 	Long: `List all issue types available in the Jira instance.
 
 Examples:

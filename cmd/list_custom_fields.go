@@ -26,8 +26,9 @@ type listCustomFieldsOptions struct {
 var listCustomFieldsOpts = listCustomFieldsOptions{}
 
 var listCustomFieldsCmd = &cobra.Command{
-	Use:   "custom-fields",
-	Short: "List custom fields",
+	Use:     "custom-fields",
+	Aliases: []string{"custom-field"},
+	Short:   "List custom fields",
 	Long: `List all custom fields available in the Jira instance.
 
 Examples:

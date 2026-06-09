@@ -12,8 +12,9 @@ import (
 )
 
 var listWorkflowSchemesCmd = &cobra.Command{
-	Use:   "workflow-schemes",
-	Short: "List workflow schemes",
+	Use:     "workflow-schemes",
+	Aliases: []string{"workflow-scheme"},
+	Short:   "List workflow schemes",
 	Long: `List all workflow schemes available in the Jira instance.
 
 Workflow schemes define the mapping between issue types and workflows for projects.

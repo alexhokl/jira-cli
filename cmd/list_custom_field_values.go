@@ -24,8 +24,9 @@ type listCustomFieldValuesOptions struct {
 var listCustomFieldValuesOpts = listCustomFieldValuesOptions{}
 
 var listCustomFieldValuesCmd = &cobra.Command{
-	Use:   "custom-field-values",
-	Short: "List values of a custom field",
+	Use:     "custom-field-values",
+	Aliases: []string{"custom-field-value"},
+	Short:   "List values of a custom field",
 	Long: `List all available values (options) for a custom field.
 
 This command is useful for viewing the allowed values of select list custom fields.

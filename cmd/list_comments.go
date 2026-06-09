@@ -23,8 +23,9 @@ type listCommentsOptions struct {
 var listCommentsOpts = listCommentsOptions{}
 
 var listCommentsCmd = &cobra.Command{
-	Use:   "comments",
-	Short: "List comments of an issue",
+	Use:     "comments",
+	Aliases: []string{"comment"},
+	Short:   "List comments of an issue",
 	Long: `List comments of an issue.
 
 Examples:

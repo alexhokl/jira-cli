@@ -11,8 +11,9 @@ import (
 )
 
 var listIssueTypeSchemesCmd = &cobra.Command{
-	Use:   "issue-type-schemes",
-	Short: "List issue type schemes",
+	Use:     "issue-type-schemes",
+	Aliases: []string{"issue-type-scheme"},
+	Short:   "List issue type schemes",
 	Long: `List all issue type schemes available in the Jira instance.
 
 Issue type schemes define which issue types are available for projects.

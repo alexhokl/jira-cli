@@ -19,8 +19,9 @@ type listWorkflowStatusPropertiesOptions struct {
 var listWorkflowStatusPropertiesOpts = listWorkflowStatusPropertiesOptions{}
 
 var listWorkflowStatusPropertiesCmd = &cobra.Command{
-	Use:   "workflow-status-properties",
-	Short: "List status properties in a workflow",
+	Use:     "workflow-status-properties",
+	Aliases: []string{"workflow-status-property"},
+	Short:   "List status properties in a workflow",
 	Long: `List all status properties associated with statuses in a workflow.
 
 Workflow status properties are key-value pairs that can be used to configure

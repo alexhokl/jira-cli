@@ -19,9 +19,10 @@ type listProjectsOptions struct {
 var listProjectsOpts = listProjectsOptions{}
 
 var listProjectsCmd = &cobra.Command{
-	Use:   "projects",
-	Short: "List all projects",
-	RunE:  runListProjects,
+	Use:     "projects",
+	Aliases: []string{"project"},
+	Short:   "List all projects",
+	RunE:    runListProjects,
 }
 
 func init() {

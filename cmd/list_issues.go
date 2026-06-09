@@ -45,8 +45,9 @@ var validStatusCategories = map[string]string{
 var listIssuesOpts = listIssuesOptions{}
 
 var listIssuesCmd = &cobra.Command{
-	Use:   "issues",
-	Short: "List issues using JQL search",
+	Use:     "issues",
+	Aliases: []string{"issue"},
+	Short:   "List issues using JQL search",
 	Long: `List issues using JQL search.
 
 You can use the --jql flag to specify a raw JQL query, or use the convenience

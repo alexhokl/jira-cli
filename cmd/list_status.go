@@ -21,8 +21,9 @@ type listStatusOptions struct {
 var listStatusOpts = listStatusOptions{}
 
 var listStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "List statuses",
+	Use:     "status",
+	Aliases: []string{"statuses"},
+	Short:   "List statuses",
 	Long: `List all statuses available in the Jira instance.
 
 Examples:

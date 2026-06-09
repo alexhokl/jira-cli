@@ -23,9 +23,10 @@ type listSprintsOptions struct {
 var listSprintsOpts = listSprintsOptions{}
 
 var listSprintsCmd = &cobra.Command{
-	Use:   "sprints",
-	Short: "List all sprints for a board",
-	RunE:  runListSprints,
+	Use:     "sprints",
+	Aliases: []string{"sprint"},
+	Short:   "List all sprints for a board",
+	RunE:    runListSprints,
 }
 
 func init() {

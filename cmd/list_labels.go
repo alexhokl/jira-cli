@@ -15,8 +15,9 @@ type listLabelsOptions struct {
 var listLabelsOpts = listLabelsOptions{}
 
 var listLabelsCmd = &cobra.Command{
-	Use:   "labels",
-	Short: "List all labels",
+	Use:     "labels",
+	Aliases: []string{"label"},
+	Short:   "List all labels",
 	Long: `List all labels used in the Jira instance.
 
 Examples:

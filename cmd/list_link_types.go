@@ -14,8 +14,9 @@ type listLinkTypesOptions struct {
 var listLinkTypesOpts = listLinkTypesOptions{}
 
 var listLinkTypesCmd = &cobra.Command{
-	Use:   "link-types",
-	Short: "List all issue link types",
+	Use:     "link-types",
+	Aliases: []string{"link-type"},
+	Short:   "List all issue link types",
 	Long: `List all available issue link types in the Jira instance.
 
 Each link type has a name and two descriptions:

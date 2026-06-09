@@ -16,8 +16,9 @@ type listIssueTransitionsOptions struct {
 var listIssueTransitionsOpts = listIssueTransitionsOptions{}
 
 var listIssueTransitionsCmd = &cobra.Command{
-	Use:   "issue-transitions",
-	Short: "List available transitions for an issue",
+	Use:     "issue-transitions",
+	Aliases: []string{"issue-transition"},
+	Short:   "List available transitions for an issue",
 	Long: `List all available transitions for a specific issue based on its current status.
 
 This command shows the transitions that can be performed on the issue from its

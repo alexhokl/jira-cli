@@ -22,9 +22,10 @@ type listBoardsOptions struct {
 var listBoardsOpts = listBoardsOptions{}
 
 var listBoardsCmd = &cobra.Command{
-	Use:   "boards",
-	Short: "List all boards",
-	RunE:  runListBoards,
+	Use:     "boards",
+	Aliases: []string{"board"},
+	Short:   "List all boards",
+	RunE:    runListBoards,
 }
 
 func init() {

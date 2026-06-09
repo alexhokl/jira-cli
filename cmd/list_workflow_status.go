@@ -19,8 +19,9 @@ type listWorkflowStatusOptions struct {
 var listWorkflowStatusOpts = listWorkflowStatusOptions{}
 
 var listWorkflowStatusCmd = &cobra.Command{
-	Use:   "workflow-status",
-	Short: "List statuses in a workflow",
+	Use:     "workflow-status",
+	Aliases: []string{"workflow-statuses"},
+	Short:   "List statuses in a workflow",
 	Long: `List all statuses associated with a workflow by workflow name.
 
 Examples:

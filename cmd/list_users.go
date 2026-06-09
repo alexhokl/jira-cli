@@ -19,8 +19,9 @@ type listUsersOptions struct {
 var listUsersOpts = listUsersOptions{}
 
 var listUsersCmd = &cobra.Command{
-	Use:   "users",
-	Short: "List all users",
+	Use:     "users",
+	Aliases: []string{"user"},
+	Short:   "List all users",
 	Long: `List all users in the Jira instance.
 
 Returns active users, inactive users, and previously deleted users that have an Atlassian account.

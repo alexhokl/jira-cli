@@ -20,8 +20,9 @@ type listWorkflowsOptions struct {
 var listWorkflowsOpts = listWorkflowsOptions{}
 
 var listWorkflowsCmd = &cobra.Command{
-	Use:   "workflows",
-	Short: "List workflows",
+	Use:     "workflows",
+	Aliases: []string{"workflow"},
+	Short:   "List workflows",
 	Long: `List all workflows available in the Jira instance.
 
 Examples:
