@@ -932,9 +932,8 @@ func parseTable(lines []string, startIndex int) ([]map[string]any, int) {
 			cellContent = append(cellContent, map[string]any{
 				"type": "tableCell",
 				"attrs": map[string]any{
-					"colspan":  1,
-					"rowspan":  1,
-					"colwidth": nil,
+					"colspan": 1,
+					"rowspan": 1,
 				},
 				"content": []map[string]any{
 					{

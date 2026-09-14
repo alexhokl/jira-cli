@@ -235,3 +235,116 @@ func TestConvertMarkdownToADF_Expand(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertMarkdownToADF_Table(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		check func(t *testing.T, doc map[string]any)
+	}{
+		{
+			name:  "table with header and data rows",
+			input: "| Container | Id |\n| --- | --- |\n| 350885 | 1 |\n| 351232 | 3 |",
+			check: func(t *testing.T, doc map[string]any) {
+				content, ok := doc["content"].([]map[string]any)
+				if !ok || len(content) != 1 || content[0]["type"] != "table" {
+					t.Fatalf("expected a single table node, got %v", doc["content"])
+				}
+
+				rows, _ := content[0]["content"].([]map[string]any)
+				if len(rows) != 3 {
+					t.Fatalf("expected 3 tableRow nodes, got %d", len(rows))
+				}
+
+				for rowIdx, row := range rows {
+					if row["type"] != "tableRow" {
+						t.Errorf("rows[%d]: expected type 'tableRow', got %q", rowIdx, row["type"])
+					}
+
+					cells, ok := row["content"].([]map[string]any)
+					if !ok {
+						t.Fatalf("rows[%d]: expected content to be a slice, got %T", rowIdx, row["content"])
+					}
+					if len(cells) != 2 {
+						t.Errorf("rows[%d]: expected 2 cells, got %d", rowIdx, len(cells))
+					}
+
+					for cellIdx, cell := range cells {
+						if cell["type"] != "tableCell" {
+							t.Errorf("rows[%d].cells[%d]: expected type 'tableCell', got %q", rowIdx, cellIdx, cell["type"])
+						}
+
+						attrs, ok := cell["attrs"].(map[string]any)
+						if !ok {
+							t.Fatalf("rows[%d].cells[%d]: expected attrs map, got %T", rowIdx, cellIdx, cell["attrs"])
+						}
+
+						// Jira's ADF schema requires colwidth to be an array of
+						// numbers; emitting nil (JSON null) is rejected with a
+						// 400 Bad Request.
+						if _, exists := attrs["colwidth"]; exists {
+							t.Errorf("rows[%d].cells[%d]: attrs must not contain 'colwidth', got %v", rowIdx, cellIdx, attrs["colwidth"])
+						}
+						if attrs["colspan"] != 1 {
+							t.Errorf("rows[%d].cells[%d]: expected colspan 1, got %v", rowIdx, cellIdx, attrs["colspan"])
+						}
+						if attrs["rowspan"] != 1 {
+							t.Errorf("rows[%d].cells[%d]: expected rowspan 1, got %v", rowIdx, cellIdx, attrs["rowspan"])
+						}
+
+						paras, ok := cell["content"].([]map[string]any)
+						if !ok || len(paras) != 1 || paras[0]["type"] != "paragraph" {
+							t.Errorf("rows[%d].cells[%d]: expected one paragraph child, got %v", rowIdx, cellIdx, cell["content"])
+						}
+					}
+				}
+			},
+		},
+		{
+			name:  "table cell with inline code",
+			input: "| Col |\n| --- |\n| `api-transport` |",
+			check: func(t *testing.T, doc map[string]any) {
+				content, ok := doc["content"].([]map[string]any)
+				if !ok || len(content) != 1 || content[0]["type"] != "table" {
+					t.Fatalf("expected a single table node, got %v", doc["content"])
+				}
+
+				rows, _ := content[0]["content"].([]map[string]any)
+				if len(rows) != 2 {
+					t.Fatalf("expected 2 tableRow nodes, got %d", len(rows))
+				}
+
+				dataRow := rows[1]
+				cells, _ := dataRow["content"].([]map[string]any)
+				if len(cells) != 1 {
+					t.Fatalf("expected 1 cell in data row, got %d", len(cells))
+				}
+
+				paras, _ := cells[0]["content"].([]map[string]any)
+				if len(paras) != 1 {
+					t.Fatalf("expected 1 paragraph in cell, got %d", len(paras))
+				}
+
+				texts, _ := paras[0]["content"].([]map[string]any)
+				if len(texts) != 1 {
+					t.Fatalf("expected 1 text node in paragraph, got %d", len(texts))
+				}
+
+				marks, _ := texts[0]["marks"].([]map[string]any)
+				if len(marks) != 1 || marks[0]["type"] != "code" {
+					t.Errorf("expected code mark on cell text, got %v", marks)
+				}
+				if texts[0]["text"] != "api-transport" {
+					t.Errorf("expected text 'api-transport', got %q", texts[0]["text"])
+				}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := convertMarkdownToADF(tc.input)
+			tc.check(t, doc)
+		})
+	}
+}
