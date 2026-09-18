@@ -35,6 +35,11 @@ type updateIssueOptions struct {
 	parent          string
 }
 
+// typeChangeRequested returns whether an issue type change was requested.
+func (o *updateIssueOptions) typeChangeRequested() bool {
+	return o.issueType != ""
+}
+
 var updateIssueOpts = updateIssueOptions{}
 
 var updateIssueCmd = &cobra.Command{
@@ -96,10 +101,13 @@ Examples:
   # Assign a parent issue (make this issue a child/subtask of another issue)
   jira-cli update issue --id PROJ-123 --parent PROJ-100
 
-  # Remove parent (unassign from parent issue)
+  # Remove parent (unassign from parent issue; not supported for subtasks,
+  # see the sub-task conversion example below)
   jira-cli update issue --id PROJ-123 --parent none
 
   # Convert a subtask to a standalone task (change type and remove parent in one call)
+  # Note: Jira only honors parent removal for standard issue types, so the type
+  # conversion is applied first, then the parent is removed
   jira-cli update issue --id PROJ-123 --type Task --parent none
 
   # Clear a custom field value
@@ -136,7 +144,7 @@ func init() {
 	flags.StringVar(&updateIssueOpts.linkIssue, "link-issue", "", "Issue key to link to (e.g., PROJ-456)")
 	flags.StringVar(&updateIssueOpts.linkType, "link-type", "", "Link type name (use 'jira-cli list link-types' to see available types)")
 	flags.StringArrayVar(&updateIssueOpts.customFields, "custom-field", nil, "Custom field to update in format 'name=value' (can be specified multiple times)")
-	flags.StringVar(&updateIssueOpts.parent, "parent", "", "Parent issue key to assign (use 'none' to remove parent)")
+	flags.StringVar(&updateIssueOpts.parent, "parent", "", "Parent issue key to assign (use 'none' to remove parent; not supported for subtasks unless combined with --type)")
 
 	updateIssueCmd.MarkFlagRequired("id")
 }
@@ -181,14 +189,31 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		fields["summary"] = updateIssueOpts.summary
 	}
 
+	isParentRemoval := updateIssueOpts.parent != "" && strings.EqualFold(updateIssueOpts.parent, "none")
+
+	var targetIssueType *swagger.IssueTypeDetails
 	if updateIssueOpts.issueType != "" {
 		projectKey := extractProjectKeyFromIssueKey(updateIssueOpts.issueKey)
-		issueTypeId, err := resolveIssueTypeId(client, ctx, projectKey, updateIssueOpts.issueType)
+		issueType, err := resolveIssueType(client, ctx, projectKey, updateIssueOpts.issueType)
 		if err != nil {
 			return err
 		}
+		targetIssueType = issueType
+	}
+
+	if isParentRemoval && !updateIssueOpts.typeChangeRequested() {
+		isSubtask, err := fetchIssueIsSubtask(client, ctx, updateIssueOpts.issueKey)
+		if err != nil {
+			return err
+		}
+		if isSubtask {
+			return fmt.Errorf("--parent none is not supported for subtasks: Jira silently ignores parent removal for subtask issue types; to detach the subtask, convert it to a standard issue type first, e.g. jira-cli update issue --id %s --type Task --parent none", updateIssueOpts.issueKey)
+		}
+	}
+
+	if targetIssueType != nil {
 		fields["issuetype"] = map[string]interface{}{
-			"id": issueTypeId,
+			"id": targetIssueType.GetId(),
 		}
 	}
 
@@ -275,12 +300,21 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	if updateIssueOpts.issueType != "" && targetIssueType != nil && targetIssueType.GetSubtask() {
+		return fmt.Errorf("cannot set parent to none while converting to subtask issue type %q: parent removal is only supported for standard issue types", targetIssueType.GetName())
+	}
+
 	if updateIssueOpts.parent != "" {
-		if strings.EqualFold(updateIssueOpts.parent, "none") {
-			// To remove parent, use update.parent with set.none = true
-			parentOp := swagger.NewFieldUpdateOperation()
-			parentOp.SetSet(map[string]interface{}{"none": true})
-			update["parent"] = []swagger.FieldUpdateOperation{*parentOp}
+		if isParentRemoval {
+			if targetIssueType == nil {
+				// To remove parent, use update.parent with set.none = true
+				parentOp := swagger.NewFieldUpdateOperation()
+				parentOp.SetSet(map[string]interface{}{"none": true})
+				update["parent"] = []swagger.FieldUpdateOperation{*parentOp}
+			}
+			// When converting the issue type in the same update, parent removal
+			// is deferred to a second request below, because Jira only honors
+			// update.parent.set.none for standard issue types
 		} else {
 			fields["parent"] = map[string]interface{}{
 				"key": updateIssueOpts.parent,
@@ -372,6 +406,35 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 			return err
 		}
 
+		// After converting a subtask to a standard issue type, remove the
+		// parent in a second request, because Jira only honors
+		// update.parent.set.none for standard issue types
+		if isParentRemoval && targetIssueType != nil {
+			parentOp := swagger.NewFieldUpdateOperation()
+			parentOp.SetSet(map[string]interface{}{"none": true})
+			parentUpdate := map[string][]swagger.FieldUpdateOperation{
+				"parent": {*parentOp},
+			}
+
+			parentDetails := swagger.NewIssueUpdateDetails()
+			parentDetails.SetUpdate(parentUpdate)
+
+			parentRequest := client.IssuesAPI.EditIssue(ctx, updateIssueOpts.issueKey).
+				IssueUpdateDetails(*parentDetails)
+
+			if updateIssueOpts.noNotify {
+				parentRequest = parentRequest.NotifyUsers(false)
+			}
+
+			_, _, err := parentRequest.Execute()
+			if err != nil {
+				return wrapAPIError(fmt.Errorf("failed to remove parent after issue type conversion: %w", err))
+			}
+
+			fmt.Printf("Issue %s converted to %s and parent removed\n", updateIssueOpts.issueKey, targetIssueType.GetName())
+			return nil
+		}
+
 		fmt.Printf("Issue %s updated\n", updateIssueOpts.issueKey)
 	}
 
@@ -422,10 +485,10 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-// resolveIssueTypeId resolves an issue type name or ID to its ID.
+// resolveIssueType resolves an issue type name or ID to its details.
 // It first attempts project-scoped lookup (precise for team-managed projects
 // where issue type IDs are project-scoped), then falls back to a global lookup.
-func resolveIssueTypeId(client *swagger.APIClient, ctx context.Context, projectKey, input string) (string, error) {
+func resolveIssueType(client *swagger.APIClient, ctx context.Context, projectKey, input string) (*swagger.IssueTypeDetails, error) {
 	if projectKey != "" {
 		project, _, err := client.ProjectsAPI.GetProject(ctx, projectKey).Execute()
 		if err == nil {
@@ -437,7 +500,7 @@ func resolveIssueTypeId(client *swagger.APIClient, ctx context.Context, projectK
 				if err == nil {
 					for _, t := range types {
 						if t.GetId() == input || strings.EqualFold(t.GetName(), input) {
-							return t.GetId(), nil
+							return &t, nil
 						}
 					}
 				}
@@ -448,12 +511,12 @@ func resolveIssueTypeId(client *swagger.APIClient, ctx context.Context, projectK
 	// Fallback: global issue type lookup by name or ID
 	types, _, err := client.IssueTypesAPI.GetIssueAllTypes(ctx).Execute()
 	if err != nil {
-		return "", wrapAPIError(fmt.Errorf("failed to get issue types: %w", err))
+		return nil, wrapAPIError(fmt.Errorf("failed to get issue types: %w", err))
 	}
 
 	for _, t := range types {
 		if t.GetId() == input || strings.EqualFold(t.GetName(), input) {
-			return t.GetId(), nil
+			return &t, nil
 		}
 	}
 
@@ -462,7 +525,43 @@ func resolveIssueTypeId(client *swagger.APIClient, ctx context.Context, projectK
 	for i, t := range types {
 		available[i] = t.GetName()
 	}
-	return "", fmt.Errorf("issue type %q not found; available issue types: %s", input, strings.Join(available, ", "))
+	return nil, fmt.Errorf("issue type %q not found; available issue types: %s", input, strings.Join(available, ", "))
+}
+
+// resolveIssueTypeId resolves an issue type name or ID to its ID.
+func resolveIssueTypeId(client *swagger.APIClient, ctx context.Context, projectKey, input string) (string, error) {
+	issueType, err := resolveIssueType(client, ctx, projectKey, input)
+	if err != nil {
+		return "", err
+	}
+	return issueType.GetId(), nil
+}
+
+// fetchIssueIsSubtask returns whether the given issue is of a subtask issue type.
+func fetchIssueIsSubtask(client *swagger.APIClient, ctx context.Context, issueKey string) (bool, error) {
+	issue, _, err := client.IssuesAPI.GetIssue(ctx, issueKey).
+		Fields([]string{"issuetype"}).
+		Execute()
+	if err != nil {
+		return false, wrapAPIError(fmt.Errorf("failed to get issue: %w", err))
+	}
+
+	issueFields := issue.GetFields()
+	if issueFields == nil {
+		return false, nil
+	}
+
+	issueType, ok := issueFields["issuetype"].(map[string]interface{})
+	if !ok {
+		return false, nil
+	}
+
+	subtask, ok := issueType["subtask"].(bool)
+	if !ok {
+		return false, nil
+	}
+
+	return subtask, nil
 }
 
 // customFieldInfo holds information about a custom field for update operations

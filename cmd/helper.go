@@ -77,9 +77,17 @@ func getAuthContext() context.Context {
 	return ctx
 }
 
+// overrideServerURL, when set, points API clients at an alternative server
+// (used by tests to route requests to a mock server)
+var overrideServerURL string
+
 func getConfiguration() *swagger.Configuration {
 	configuration := swagger.NewConfiguration()
-	configuration.Servers[0].URL = fmt.Sprintf("https://%s.atlassian.net", viper.GetString("organization"))
+	if overrideServerURL != "" {
+		configuration.Servers[0].URL = overrideServerURL
+	} else {
+		configuration.Servers[0].URL = fmt.Sprintf("https://%s.atlassian.net", viper.GetString("organization"))
+	}
 	configuration.HTTPClient = &http.Client{
 		Transport: &timeFixTransport{},
 	}
@@ -105,7 +113,11 @@ func getSoftwareAuthContext() context.Context {
 
 func getSoftwareConfiguration() *swagger_software.Configuration {
 	configuration := swagger_software.NewConfiguration()
-	configuration.Servers[0].URL = fmt.Sprintf("https://%s.atlassian.net", viper.GetString("organization"))
+	if overrideServerURL != "" {
+		configuration.Servers[0].URL = overrideServerURL
+	} else {
+		configuration.Servers[0].URL = fmt.Sprintf("https://%s.atlassian.net", viper.GetString("organization"))
+	}
 	configuration.HTTPClient = &http.Client{
 		Transport: &timeFixTransport{},
 	}
