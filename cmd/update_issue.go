@@ -16,6 +16,7 @@ import (
 
 type updateIssueOptions struct {
 	issueKey        string
+	issueType       string
 	summary         string
 	descriptionFile string
 	priority        string
@@ -44,6 +45,9 @@ var updateIssueCmd = &cobra.Command{
 Examples:
   # Update issue summary
   jira-cli update issue --id PROJ-123 --summary "New summary"
+
+  # Change issue type (e.g., convert a subtask to a standalone task)
+  jira-cli update issue --id PROJ-123 --type Task
 
   # Update issue description from file
   jira-cli update issue --id PROJ-123 --description-file description.md
@@ -95,6 +99,9 @@ Examples:
   # Remove parent (unassign from parent issue)
   jira-cli update issue --id PROJ-123 --parent none
 
+  # Convert a subtask to a standalone task (change type and remove parent in one call)
+  jira-cli update issue --id PROJ-123 --type Task --parent none
+
   # Clear a custom field value
   jira-cli update issue --id PROJ-123 --custom-field "Team="
 
@@ -113,6 +120,7 @@ func init() {
 
 	flags := updateIssueCmd.Flags()
 	flags.StringVarP(&updateIssueOpts.issueKey, "id", "i", "", "Issue ID (e.g., PROJ-123) (required)")
+	flags.StringVar(&updateIssueOpts.issueType, "type", "", "Issue type name or ID (use 'jira-cli list issue-types' to see available types)")
 	flags.StringVarP(&updateIssueOpts.summary, "summary", "s", "", "Issue summary/title")
 	flags.StringVarP(&updateIssueOpts.descriptionFile, "description-file", "d", "", "Path to a file containing issue description in markdown")
 	flags.StringVar(&updateIssueOpts.priority, "priority", "", "Priority (e.g., Highest, High, Medium, Low, Lowest)")
@@ -136,6 +144,7 @@ func init() {
 func runUpdateIssue(_ *cobra.Command, _ []string) error {
 	// Check that at least one field is being updated
 	if updateIssueOpts.summary == "" &&
+		updateIssueOpts.issueType == "" &&
 		updateIssueOpts.descriptionFile == "" &&
 		updateIssueOpts.priority == "" &&
 		updateIssueOpts.assignee == "" &&
@@ -170,6 +179,17 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 
 	if updateIssueOpts.summary != "" {
 		fields["summary"] = updateIssueOpts.summary
+	}
+
+	if updateIssueOpts.issueType != "" {
+		projectKey := extractProjectKeyFromIssueKey(updateIssueOpts.issueKey)
+		issueTypeId, err := resolveIssueTypeId(client, ctx, projectKey, updateIssueOpts.issueType)
+		if err != nil {
+			return err
+		}
+		fields["issuetype"] = map[string]interface{}{
+			"id": issueTypeId,
+		}
 	}
 
 	if updateIssueOpts.descriptionFile != "" {
@@ -400,6 +420,49 @@ func runUpdateIssue(_ *cobra.Command, _ []string) error {
 	}
 
 	return nil
+}
+
+// resolveIssueTypeId resolves an issue type name or ID to its ID.
+// It first attempts project-scoped lookup (precise for team-managed projects
+// where issue type IDs are project-scoped), then falls back to a global lookup.
+func resolveIssueTypeId(client *swagger.APIClient, ctx context.Context, projectKey, input string) (string, error) {
+	if projectKey != "" {
+		project, _, err := client.ProjectsAPI.GetProject(ctx, projectKey).Execute()
+		if err == nil {
+			projectId, parseErr := parseProjectId(project.GetId())
+			if parseErr == nil {
+				types, _, err := client.IssueTypesAPI.GetIssueTypesForProject(ctx).
+					ProjectId(projectId).
+					Execute()
+				if err == nil {
+					for _, t := range types {
+						if t.GetId() == input || strings.EqualFold(t.GetName(), input) {
+							return t.GetId(), nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback: global issue type lookup by name or ID
+	types, _, err := client.IssueTypesAPI.GetIssueAllTypes(ctx).Execute()
+	if err != nil {
+		return "", wrapAPIError(fmt.Errorf("failed to get issue types: %w", err))
+	}
+
+	for _, t := range types {
+		if t.GetId() == input || strings.EqualFold(t.GetName(), input) {
+			return t.GetId(), nil
+		}
+	}
+
+	// Build list of available issue type names for the error message
+	available := make([]string, len(types))
+	for i, t := range types {
+		available[i] = t.GetName()
+	}
+	return "", fmt.Errorf("issue type %q not found; available issue types: %s", input, strings.Join(available, ", "))
 }
 
 // customFieldInfo holds information about a custom field for update operations
