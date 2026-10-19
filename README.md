@@ -27,3 +27,9 @@ api_key: key_from_jira
   key](https://support.atlassian.com/organization-administration/docs/manage-an-organization-with-the-admin-apis/)
 - [API
   reference](https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/)
+
+## Agent skill
+
+[`skills/jira-cli/`](skills/jira-cli) is an Agent Skill that teaches a coding agent to
+drive the `jira-cli` CLI. Install it into `~/.agents/skills` and
+`~/.claude/skills` with `task install-skill`.

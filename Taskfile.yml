@@ -127,3 +127,10 @@ tasks:
       - perl -i -pe 's/o\.HasDefaultValue =/o.HasDefaultValueFlag =/g' swagger_software/model_issue_bean_editmeta_all_of_fields_value.go
       - perl -i -pe 's/= o\.HasDefaultValue$/= o.HasDefaultValueFlag/g' swagger_software/model_issue_bean_editmeta_all_of_fields_value.go
       - perl -i -pe 's/\*o\.HasDefaultValue$/*o.HasDefaultValueFlag/g' swagger_software/model_issue_bean_editmeta_all_of_fields_value.go
+
+  install-skill:
+    desc: Install the skill to the local system
+    cmds:
+      - mkdir -p ~/.agents/skills ~/.claude/skills
+      - ln -snf "{{.TASKFILE_DIR}}/skills/jira-cli" ~/.agents/skills/jira-cli
+      - ln -snf "{{.TASKFILE_DIR}}/skills/jira-cli" ~/.claude/skills/jira-cli
