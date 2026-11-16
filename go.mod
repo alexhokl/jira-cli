@@ -38,3 +38,5 @@ require (
 replace github.com/alexhokl/jira-cli/swagger => ./swagger
 
 replace github.com/alexhokl/jira-cli/swagger_software => ./swagger_software
+
+// replace github.com/alexhokl/helper => ../helper
