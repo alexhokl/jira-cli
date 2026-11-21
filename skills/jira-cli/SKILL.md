@@ -159,6 +159,17 @@ jira-cli update issue -i PROJ-123 --link-issue PROJ-456 --link-type Blocks
 ```
 *(Use `jira-cli list link-types` to see available type names and their inward/outward descriptions)*
 
+#### Blocker chains are transitive
+
+When adding "is blocked by" links (e.g. from blockers named in comments), link each target issue **directly** to every blocker in its chain: if A is blocked by B and B is blocked by C, A also gets "is blocked by" C. Walk the chain through both the blockers named in each blocker's comments and its existing `Blocks` links, until no new keys appear. Done when every key in the closure is a direct blocker of the target.
+
+`jira-cli get issue` does not show links, so read them via REST (credentials as in the bulk-move example below):
+```bash
+# Direct blockers (inward "Blocks" links) of one issue
+curl -sS -u "$email:$key" "https://<org>.atlassian.net/rest/api/3/issue/<KEY>?fields=issuelinks" \
+  | jq -r '.fields.issuelinks[] | select(.inwardIssue and .type.name=="Blocks") | .inwardIssue.key'
+```
+
 #### ⚠️ Gotcha: `--parent none` is a silent no-op for sub-tasks
 
 The CLI reports success ("Issue X updated") but Jira **ignores** `update.parent.set.none` for `Sub-task` type issues (it only detaches standard issue types). Sub-tasks also cannot exist without a parent.
